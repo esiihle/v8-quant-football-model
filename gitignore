@@ -1,0 +1,37 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Notebooks ---
+.ipynb_checkpoints/
+
+# --- Environment / secrets ---
+.env
+*.local
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+
+# --- Data (keep the folders, ignore the contents) ---
+# Raw and processed data are not version-controlled; document sources instead.
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# --- Logs & model artefacts ---
+*.log
+logs/
+*.pkl
+*.joblib
