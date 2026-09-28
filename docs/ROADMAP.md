@@ -7,7 +7,13 @@
 ## Planning assumptions
 
 - **Inception:** 1 September 2026.
-
+- **Effort:** ~1 hour per day, ~6 days per week → **~6 focused hours/week**.
+- **Honesty note on small sessions:** one-hour blocks carry a context-switching
+  cost (you spend a few minutes reloading state each session). Estimates below
+  include a modest buffer for this. Numeric/optimisation work (Dixon-Coles fit)
+  is deliberately given more time — it is the hardest part to get *stable*, not
+  just *running*.
+- Dates are targets, not promises. The commit history is the real record.
 
 ## Milestone summary
 
@@ -33,7 +39,8 @@
 Scaffold the repo, environment, config system, and data schema.
 - **Deliverables:** repo live on GitHub; `pip install -r requirements.txt` works;
   `config.yaml` drives a stub run; sample data loads and prints a shape report.
-- **Done when:** a fresh clone runs `python scripts/run_pipeline.py` w
+- **Done when:** a fresh clone runs `python scripts/run_pipeline.py` without error
+  (even if it only echoes the config).
 
 ### Phase 1 — Data pipeline & validation (Weeks 2–3 · Sep 8–21)
 Ingestion, cleaning, strict schema validation, canonical storage.

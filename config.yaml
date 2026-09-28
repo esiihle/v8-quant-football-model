@@ -1,0 +1,46 @@
+# =============================================================================
+# V8 configuration — the single source of truth for a run.
+# Nothing that changes behaviour should be hard-coded in the source; it lives
+# here so the same command always reproduces the same result.
+# =============================================================================
+
+project: v8-quant-football-model
+seed: 42                      # fixes all randomness for reproducibility
+
+data:
+  sample_path: data/sample/sample_matches.csv   # tiny bundled sample (Phase 0)
+  raw_dir: data/raw                             # real inputs (git-ignored)
+  processed_dir: data/processed                 # canonical outputs (git-ignored)
+
+# Column contract for incoming match+odds data (football-data.co.uk style).
+# Phase 1 will enforce this strictly; Phase 0 only checks the required columns.
+schema:
+  required_columns:
+    - Date
+    - HomeTeam
+    - AwayTeam
+    - FTHG          # full-time home goals
+    - FTAG          # full-time away goals
+    - FTR           # full-time result: H / D / A
+  odds_columns:      # bookmaker odds we bet into
+    - B365H
+    - B365D
+    - B365A
+  closing_odds_columns:   # closing odds — used for CLV in Phase 6
+    - PSCH
+    - PSCD
+    - PSCA
+
+# Model settings (placeholders — tuned in their phases).
+model:
+  time_decay_half_life_days: 180   # Phase 2/3: exponential recency weighting
+  max_goals: 10                    # Phase 3: score-matrix truncation
+
+# Staking settings (used from Phase 5).
+staking:
+  kelly_fraction: 0.25             # fractional Kelly (quarter) to blunt variance
+  starting_bankroll: 1000
+  min_edge: 0.02                   # only bet when model prob beats implied by 2%+
+
+logging:
+  level: INFO
