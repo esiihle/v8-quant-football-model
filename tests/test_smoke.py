@@ -74,3 +74,34 @@ def test_downstream_stages_declared_but_pending():
     ):
         with pytest.raises(NotImplementedError):
             call()
+
+
+# --- Added 30 Sep 2026: real-data discovery -------------------------------
+
+
+def test_expected_raw_files_are_named_and_linked_correctly():
+    """Every configured league-season maps to a filename and a download URL."""
+    config = load_config()
+    entries = ingest.expected_raw_files(config)
+
+    assert len(entries) == (
+        len(config["data"]["leagues"]) * len(config["data"]["seasons"])
+    )
+    for entry in entries:
+        # Filename follows the configured pattern, e.g. E0_2425.csv
+        assert entry["path"].name == config["data"]["file_pattern"].format(
+            league=entry["league"], season=entry["season"]
+        )
+        # And we can always tell the user where to get it.
+        assert entry["season"] in entry["url"]
+        assert entry["league"] in entry["url"]
+
+
+def test_shape_report_flags_odds_coverage():
+    """With a config, the report says whether closing odds (CLV) are present."""
+    config = load_config()
+    sample = REPO_ROOT / config["data"]["sample_path"]
+    df = ingest.load_matches(sample, config)
+
+    report = ingest.build_shape_report(df, config)
+    assert "closing odds (CLV)" in report

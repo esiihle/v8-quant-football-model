@@ -17,8 +17,49 @@
 - Odds: decimal odds $o$ for each outcome; market-implied probability
   $\tilde{p} = 1/o$ (before de-vig); closing odds captured separately for CLV.
 
-To be completed: exact schema, leagues/seasons covered, data sources, de-vig
-method (proportional vs. Shin).
+### 1.1 Data source (settled 30 Sep 2026)
+
+**football-data.co.uk**, one CSV per league-season, downloaded from
+`https://www.football-data.co.uk/mmz4281/{season}/{league}.csv`. It was chosen
+over alternatives for one decisive reason: it publishes **both pre-match and
+closing odds** in the same file. Closing odds are what make closing-line value
+measurable, and CLV is the headline claim of this project — a source without
+them would quietly remove the project's main result.
+
+**Coverage at present:** English Premier League (`E0`), seasons 2023/24 and
+2024/25. One league first, to prove the pipeline end to end before scaling out.
+
+### 1.2 Fields we rely on
+
+| Group | Columns | Used for |
+|---|---|---|
+| Identity | `Div`, `Date`, `HomeTeam`, `AwayTeam` | joining, ordering, time-decay weights |
+| Result | `FTHG`, `FTAG`, `FTR` | the Dixon-Coles likelihood (§3) |
+| Shots | `HS`, `AS`, `HST`, `AST` | xG proxy (§2.3) |
+| Odds (bet into) | `B365H`, `B365D`, `B365A` | value detection and staking (§5) |
+| Closing odds | `PSCH`, `PSCD`, `PSCA` | closing-line value (§6.3) |
+
+Everything else in the file (half-time scores, cards, corners, referee, the
+other bookmakers, Asian handicap lines) is carried through untouched for now and
+either used or dropped explicitly in Phase 1 — never dropped by accident.
+
+### 1.3 Known quirks of the source
+
+Observed when loading the real files, and handled in `src/ingest.py`:
+
+- **Dates are day-first**, and the year is 2-digit in some seasons and 4-digit
+  in others, so dates are parsed with `dayfirst=True, format="mixed"`.
+- **Trailing empty columns and rows** appear in several files (spreadsheet
+  padding) and are dropped on load.
+- **Column sets differ between seasons** — a column present in one season may be
+  absent in another, which shows up as a block of nulls exactly the size of one
+  season. The shape report surfaces this rather than hiding it.
+- **Occasional missing odds** on individual matches; these rows are simply not
+  bettable and will be excluded at the staking stage, not silently imputed.
+- Encoding is not always UTF-8, so the loader falls back to latin-1.
+
+Still to be settled: the exact de-vig method (proportional vs. Shin), before
+Phase 5 staking.
 
 ## 2. Feature engineering
 **Status: 🟡 skeleton — built in Phase 2.**

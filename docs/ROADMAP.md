@@ -6,7 +6,10 @@
 
 ## Planning assumptions
 
-- **Inception:** 1 September 2026.
+- **Inception:** 28 September 2026 (documentation committed 1 Sep; the build
+  itself started 28 Sep and the schedule is baselined from that date).
+- **Pace:** ~1 hour/day, with **one commit per working day** — the commit
+  history is itself the evidence of consistent, incremental delivery.
 - **Effort:** ~1 hour per day, ~6 days per week → **~6 focused hours/week**.
 - **Honesty note on small sessions:** one-hour blocks carry a context-switching
   cost (you spend a few minutes reloading state each session). Estimates below
@@ -19,37 +22,37 @@
 
 | Phase | Focus | Weeks | Target window | Hours |
 |---|---|---|---|---|
-| 0 | Foundations & scaffolding | 1 | Sep 1 – Sep 7 | 6 |
-| 1 | Data pipeline & validation | 2–3 | Sep 8 – Sep 21 | 12 |
-| 2 | Feature engineering | 4–5 | Sep 22 – Oct 5 | 12 |
-| 3 | Dixon-Coles model | 6–7 | Oct 6 – Oct 19 | 12 |
-| 4 | Probability calibration | 8 | Oct 20 – Oct 26 | 6 |
-| 5 | Staking (Kelly) | 9 | Oct 27 – Nov 2 | 6 |
-| 6 | Backtest & CLV | 10 | Nov 3 – Nov 9 | 6 |
-| 7 | Hardening | 11 | Nov 10 – Nov 16 | 6 |
-| 8 | Docs & presentation | 12 | Nov 17 – Nov 23 | 6 |
+| 0 | Foundations & scaffolding | 1 | Sep 28 – Oct 4 | 6 |
+| 1 | Data pipeline & validation | 2–3 | Oct 5 – Oct 18 | 12 |
+| 2 | Feature engineering | 4–5 | Oct 19 – Nov 1 | 12 |
+| 3 | Dixon-Coles model | 6–7 | Nov 2 – Nov 15 | 12 |
+| 4 | Probability calibration | 8 | Nov 16 – Nov 22 | 6 |
+| 5 | Staking (Kelly) | 9 | Nov 23 – Nov 29 | 6 |
+| 6 | Backtest & CLV | 10 | Nov 30 – Dec 6 | 6 |
+| 7 | Hardening | 11 | Dec 7 – Dec 13 | 6 |
+| 8 | Docs & presentation | 12 | Dec 14 – Dec 20 | 6 |
 
-**🎯 Target presentation date: 21 November 2026.**
+**🎯 Target presentation date: 18 December 2026.**
 
 ---
 
 ## Phase detail
 
-### Phase 0 — Foundations (Week 1 · Sep 1–7)
+### Phase 0 — Foundations (Week 1 · Sep 28–Oct 4)
 Scaffold the repo, environment, config system, and data schema.
 - **Deliverables:** repo live on GitHub; `pip install -r requirements.txt` works;
   `config.yaml` drives a stub run; sample data loads and prints a shape report.
 - **Done when:** a fresh clone runs `python scripts/run_pipeline.py` without error
   (even if it only echoes the config).
 
-### Phase 1 — Data pipeline & validation (Weeks 2–3 · Sep 8–21)
+### Phase 1 — Data pipeline & validation (Weeks 2–3 · Oct 5–18)
 Ingestion, cleaning, strict schema validation, canonical storage.
 - **Deliverables:** `ingest.py`; a data-quality report (row counts, null map,
   date coverage, dedup); validated processed dataset.
 - **Done when:** malformed input fails loudly with a clear error, and clean input
   produces a canonical table that every downstream stage can rely on.
 
-### Phase 2 — Feature engineering (Weeks 4–5 · Sep 22–Oct 5)
+### Phase 2 — Feature engineering (Weeks 4–5 · Oct 19–Nov 1)
 Attack/defence strengths, **Bayesian shrinkage**, **xG proxies**, time decay,
 home advantage.
 - **Deliverables:** `features.py`; a notebook visualising the shrinkage effect
@@ -57,7 +60,7 @@ home advantage.
 - **Done when:** features are reproducible, documented, and the shrinkage
   behaviour is demonstrably correct on a toy example.
 
-### Phase 3 — Dixon-Coles model (Weeks 6–7 · Oct 6–19)
+### Phase 3 — Dixon-Coles model (Weeks 6–7 · Nov 2–15)
 Bivariate Poisson with the `rho` low-score correction, fitted by time-weighted
 MLE.
 - **Deliverables:** `dixon_coles.py`; fitted parameters; a full score-matrix →
@@ -66,40 +69,40 @@ MLE.
   tests on the likelihood and `rho` correction pass, and probabilities for a
   known fixture look sensible.
 
-### Phase 4 — Calibration (Week 8 · Oct 20–26)
+### Phase 4 — Calibration (Week 8 · Nov 16–22)
 Isotonic / Platt scaling and reliability analysis.
 - **Deliverables:** `calibrate.py`; reliability diagrams; Brier and log-loss
   before/after.
 - **Done when:** calibrated probabilities measurably beat raw ones on a proper
   scoring rule, out of sample.
 
-### Phase 5 — Staking (Week 9 · Oct 27–Nov 2)
+### Phase 5 — Staking (Week 9 · Nov 23–29)
 Value detection, **fractional Kelly**, bankroll simulation.
 - **Deliverables:** `staking.py`; a bankroll curve with drawdowns; tests on the
   Kelly fraction maths.
 - **Done when:** staking is fully driven by `(model prob, market odds)` and the
   bankroll simulation is reproducible.
 
-### Phase 6 — Backtest & CLV (Week 10 · Nov 3–9)
+### Phase 6 — Backtest & CLV (Week 10 · Nov 30–Dec 6)
 Walk-forward engine, lookahead guards, **closing-line value**, headline metrics.
 - **Deliverables:** `backtest.py`, `clv.py`, `metrics.py`; a backtest report;
   the CLV distribution chart.
 - **Done when:** the backtest provably uses only pre-match information, and CLV +
   ROI/yield/drawdown are reported with confidence intervals.
 
-### Phase 7 — Hardening (Week 11 · Nov 10–16)
+### Phase 7 — Hardening (Week 11 · Dec 7–13)
 Tests, input validation, logging, reproducibility, CI.
 - **Deliverables:** green test suite; pinned deps; structured logging; a GitHub
   Actions workflow running tests on push.
 - **Done when:** a clean clone reproduces the headline numbers exactly, and CI is
   green.
 
-### Phase 8 — Docs & presentation (Week 12 · Nov 17–23)
+### Phase 8 — Docs & presentation (Week 12 · Dec 14–20)
 Finalise README with real charts, complete `methodology.md`, build the deck.
 - **Deliverables:** results-populated README; methodology write-up; slide deck
   (problem → method → results → honest limitations).
 - **Done when:** the project can be *presented* as fluently as it can be run.
-  **← Presentation milestone, target 21 Nov 2026.**
+  **← Presentation milestone, target 18 Dec 2026.**
 
 ---
 
@@ -107,8 +110,8 @@ Finalise README with real charts, complete `methodology.md`, build the deck.
 
 This project runs alongside the **Credit Default Scorecard** at a matching ~1
 hour/day. The scorecard is the smaller build and is scheduled to reach its
-presentation milestone first (~31 Oct 2026); V8 follows (~21 Nov 2026). Both
-begin at inception on 1 September 2026.
+presentation milestone first (~27 Nov 2026); V8 follows (~18 Dec 2026). Both
+are baselined from 28 September 2026.
 
 ## Risks & adjustments
 

@@ -12,6 +12,16 @@ data:
   raw_dir: data/raw                             # real inputs (git-ignored)
   processed_dir: data/processed                 # canonical outputs (git-ignored)
 
+  # --- Real data source (added 30 Sep 2026) ---------------------------------
+  # football-data.co.uk publishes one CSV per league-season containing results,
+  # shots, and both opening and CLOSING bookmaker odds. Closing odds are what
+  # make CLV possible in Phase 6, which is why this source was chosen.
+  source: football-data.co.uk
+  leagues: ["E0"]                # E0 = English Premier League
+  seasons: ["2324", "2425"]      # "2324" = the 2023/24 season
+  file_pattern: "{league}_{season}.csv"          # how files are named in data/raw
+  download_url: "https://www.football-data.co.uk/mmz4281/{season}/{league}.csv"
+
 # Column contract for incoming match+odds data (football-data.co.uk style).
 # Phase 1 will enforce this strictly; Phase 0 only checks the required columns.
 schema:

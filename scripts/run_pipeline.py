@@ -6,11 +6,18 @@ walks the remaining stages and reports each as [done] or [pending]. As each
 phase is built, its stage lights up here automatically — so this runner doubles
 as the project's live progress indicator.
 
+30 Sep 2026: the runner now prefers REAL data. It looks for the league/season
+files listed in config.yaml under data/raw/; if none are there it falls back to
+the bundled sample and prints the exact download URLs. The sample stays in the
+repo on purpose, so a fresh clone (and the test suite) always runs without
+needing a download.
+
 Usage
 -----
-    python scripts/run_pipeline.py                      # config.yaml + bundled sample
+    python scripts/run_pipeline.py                      # real data if present, else sample
     python scripts/run_pipeline.py --config config.yaml # explicit config
-    python scripts/run_pipeline.py --data path/to/other_matches.csv  # different data
+    python scripts/run_pipeline.py --data path/to/other_matches.csv  # one specific file
+    python scripts/run_pipeline.py --sample             # force the bundled sample
 """
 from __future__ import annotations
 
@@ -54,24 +61,51 @@ def main():
     parser = argparse.ArgumentParser(description="Run the V8 pipeline.")
     parser.add_argument("--config", default=None, help="Path to config.yaml")
     parser.add_argument("--data", default=None, help="Override the input CSV path")
+    parser.add_argument("--sample", action="store_true",
+                        help="Force the bundled sample instead of data/raw")
     args = parser.parse_args()
 
     config = load_config(args.config)
     set_seed(config.get("seed", 42))
 
-    # Resolve the data path (CLI override wins; relative paths resolve to root).
-    data_path = args.data or config["data"]["sample_path"]
-    data_path = Path(data_path)
-    if not data_path.is_absolute():
-        data_path = REPO_ROOT / data_path
-
     print(f"\nV8 pipeline — config loaded, seed={config.get('seed', 42)}")
-    print(f"input data: {data_path}\n")
 
-    # --- Stage 1: ingest (implemented in Phase 0) ---
+    # --- Stage 1: ingest ---
+    # Three ways in, in priority order:
+    #   1. --data <file>   : one explicit file
+    #   2. data/raw/*      : the real league-season files named in the config
+    #   3. the sample      : bundled fallback, so a fresh clone always runs
     print("Stage 1 — Ingest")
-    df = ingest.load_matches(data_path, config)
-    print(ingest.build_shape_report(df))
+
+    if args.data:
+        data_path = Path(args.data)
+        if not data_path.is_absolute():
+            data_path = REPO_ROOT / data_path
+        print(f"  source: explicit file — {data_path}")
+        df = ingest.load_matches(data_path, config)
+
+    else:
+        raw_files = ingest.expected_raw_files(config)
+        found = [f for f in raw_files if f["exists"]]
+        missing = [f for f in raw_files if not f["exists"]]
+
+        # Always say what is missing, even if some files were found: a silently
+        # half-loaded dataset is exactly the kind of thing that ruins a backtest.
+        for entry in missing:
+            print(f"  MISSING: {entry['path'].name}  ->  download {entry['url']}")
+            print(f"           and save it as {entry['path']}")
+
+        if found and not args.sample:
+            print(f"  source: real data — {len(found)} of {len(raw_files)} configured files")
+            df = ingest.load_many(found, config)
+        else:
+            sample_path = REPO_ROOT / config["data"]["sample_path"]
+            reason = "forced by --sample" if args.sample else "no raw files found yet"
+            print(f"  source: bundled sample ({reason}) — {sample_path.name}")
+            df = ingest.load_matches(sample_path, config)
+
+    print()
+    print(ingest.build_shape_report(df, config))
     print()
 
     # --- Downstream stages (progressively implemented) ---
