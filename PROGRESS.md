@@ -5,7 +5,8 @@
 > and you know exactly where the project stands. Newest entry at the top.
 
 **Current phase:** Phase 0 complete (Sep 28 – Oct 4); Phase 1 opens 5 Oct
-**Overall status:** 🟢 Pipeline runs end-to-end on **real** EPL data; tests green (6).
+**Overall status:** 🟢 Pipeline runs end-to-end on **real** EPL data; tests green (6);
+exploration notebook written and run.
 **Next action:** Implement strict schema validation in `src/ingest.py` (the
 `PHASE 1` marker) — types, date parsing, duplicate fixtures, goal/result checks —
 and a data-quality report.
@@ -39,11 +40,37 @@ pip install -r requirements.txt
 python scripts/run_pipeline.py     # real data from data/raw if present, else the sample
 python scripts/run_pipeline.py --sample   # force the bundled sample
 pytest                             # 6 smoke tests, all green
+# notebooks/01_exploration.ipynb   # open in VS Code, Run All
 ```
 
 ---
 
 ## Session log
+
+### 2026-10-01 — Exploration notebook
+- Added `notebooks/01_exploration.ipynb`. It imports from `src/` rather than
+  duplicating loader logic, and runs on the real files when present, the sample
+  otherwise.
+- Sections, each tied to the phase it justifies: home advantage (Phase 3),
+  observed scorelines vs independent Poisson (motivates the Dixon-Coles τ
+  correction, Phase 3), bookmaker overround and market calibration (de-vig
+  decision + the Phase 4 benchmark), shots vs goals (the xG proxy, Phase 2).
+- Added `ipykernel` to requirements.txt (VS Code's Jupyter extension needs it).
+
+#### Findings from the real data — FILL IN after running the notebook
+| Measurement | Value | Expected / note |
+|---|---|---|
+| Outcome split H / D / A | | ~46 / 26 / 28 in top leagues |
+| Mean goals home / away | | home should be clearly higher |
+| 0-0 vs Poisson (`diff_pct`) | | Dixon-Coles predicts an excess |
+| 1-0 vs Poisson | | |
+| 0-1 vs Poisson | | |
+| 1-1 vs Poisson | | |
+| Mean overround, bet-into odds | | |
+| Mean overround, closing odds | | closing is usually tighter |
+| Shots on target vs goals, r | | ~0.5 is normal and useful |
+
+- **Next:** draft the canonical schema that Phase 1's validation will enforce.
 
 ### 2026-09-30 — Real data ingestion + schedule re-baseline
 - Re-baselined `docs/ROADMAP.md` from a 28 Sep inception; target presentation
