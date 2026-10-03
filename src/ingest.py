@@ -9,15 +9,28 @@ discovering the league/season files listed in the config, loading several of
 them into one table, and reporting odds coverage (including closing odds, which
 Phase 6 needs for CLV).
 
-Phase 1 (next): strict schema validation — types, ranges, duplicate fixtures,
-date parsing, and loud failure on anything malformed. Look for the ``PHASE 1``
-marker below for exactly where that logic goes.
+2 Oct 2026 — Phase 1: strict validation and the canonical table. The flow is
+
+    load_many()  ->  validate_raw()  ->  clean()  ->  to_canonical()  ->  save
+
+and ``run_ingest()`` wires those together and returns a data-quality report.
+
+Two principles run through it:
+
+1. **Fail loudly on anything structural.** A missing required column or a file
+   so broken that most rows would be dropped stops the run. Silent degradation
+   is how a backtest ends up reporting a number nobody can explain.
+2. **Record everything we silently fix.** Rows dropped, results recomputed, odds
+   voided — all counted and reported, never discarded quietly.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+
+from src import canonical
 
 # Repo root = two levels up from this file (src/ingest.py -> src -> repo root).
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -107,9 +120,9 @@ def load_matches(path, config=None):
                 f"Found columns: {list(df.columns)}"
             )
 
-    # PHASE 1 goes here: parse Date -> datetime, enforce dtypes, drop/flag
-    # duplicate fixtures, check goals are non-negative integers, and reconcile
-    # FTR against (FTHG, FTAG).
+    # Note: no cleaning happens here on purpose. load_* reads what is on disk;
+    # clean() below decides what is trustworthy. Keeping those separate means a
+    # raw file can always be inspected exactly as the source published it.
     return df
 
 
@@ -224,3 +237,284 @@ def build_shape_report(df, config=None):
         lines.append(f"nulls: {shown}{extra}")
 
     return "\n".join(lines)
+
+
+# ===========================================================================
+# Phase 1 — validation, cleaning, canonical table
+# ===========================================================================
+
+
+class DataQualityError(Exception):
+    """Raised when the input is too broken to continue.
+
+    A separate exception type (rather than a bare ValueError) so a caller can
+    tell "this data is unusable" apart from an ordinary programming error.
+    """
+
+
+def validate_raw(df, config):
+    """Check the structure of a raw frame before any cleaning happens.
+
+    Structural problems raise; everything else is returned as a list of notes to
+    be included in the data-quality report.
+
+    Raises
+    ------
+    DataQualityError
+        If a required column is missing, or the frame is empty.
+    """
+    notes = []
+    schema = config.get("schema", {})
+    required = schema.get("required_columns", [])
+
+    if len(df) == 0:
+        raise DataQualityError("The input has no rows at all.")
+
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise DataQualityError(
+            f"Required columns are missing: {missing}. "
+            f"Columns present: {sorted(df.columns)[:15]}..."
+        )
+
+    # Not fatal, but the pipeline is much less useful without them.
+    for label, cols in [
+        ("odds", schema.get("odds_columns", [])),
+        ("closing odds", schema.get("closing_odds_columns", [])),
+    ]:
+        absent = [c for c in cols if c not in df.columns]
+        if absent:
+            notes.append(f"{label} columns absent: {absent}")
+
+    return notes
+
+
+def clean(df, config):
+    """Turn a raw frame into trustworthy rows, counting everything changed.
+
+    Steps, in order:
+      1. parse dates (day-first, mixed 2- and 4-digit years)
+      2. tidy team names (stray whitespace is a real and silent join-breaker)
+      3. force goals to whole numbers and sanity-check the range
+      4. recompute the result from the goals rather than trusting the file
+      5. void odds that are outside the plausible range
+
+    Returns
+    -------
+    (pandas.DataFrame, dict)
+        The cleaned frame and a dictionary of counts for the report.
+    """
+    rules = config.get("validation", {})
+    report = {"rows_in": len(df)}
+    out = df.copy()
+
+    # --- 1. Dates ---------------------------------------------------------
+    out["MatchDate"] = pd.to_datetime(
+        out["Date"], dayfirst=True, format="mixed", errors="coerce"
+    )
+    bad_dates = int(out["MatchDate"].isna().sum())
+    report["dropped_unparseable_date"] = bad_dates
+    out = out[out["MatchDate"].notna()]
+
+    # --- 2. Team names ----------------------------------------------------
+    # " Arsenal" and "Arsenal" are different strings and would become two teams.
+    for col in ("HomeTeam", "AwayTeam"):
+        before = out[col].copy()
+        out[col] = out[col].astype(str).str.strip()
+        report[f"whitespace_trimmed_{col}"] = int((before != out[col]).sum())
+
+    # --- 3. Goals ---------------------------------------------------------
+    max_goals = rules.get("max_goals", 15)
+    for col in ("FTHG", "FTAG"):
+        out[col] = pd.to_numeric(out[col], errors="coerce")
+
+    implausible = (
+        out["FTHG"].isna() | out["FTAG"].isna()
+        | (out["FTHG"] < 0) | (out["FTAG"] < 0)
+        | (out["FTHG"] > max_goals) | (out["FTAG"] > max_goals)
+    )
+    report["dropped_implausible_goals"] = int(implausible.sum())
+    out = out[~implausible]
+    out["FTHG"] = out["FTHG"].astype(int)
+    out["FTAG"] = out["FTAG"].astype(int)
+
+    # --- 4. Result --------------------------------------------------------
+    # Derive H/D/A from the goals. If the file disagrees, the file is wrong:
+    # goals are the primary record and the result is a convenience column.
+    derived = np.where(
+        out["FTHG"] > out["FTAG"], "H",
+        np.where(out["FTHG"] < out["FTAG"], "A", "D"),
+    )
+    if "FTR" in out.columns:
+        mismatches = int((out["FTR"].astype(str).str.strip() != derived).sum())
+        report["result_mismatches_corrected"] = mismatches
+    out["Result"] = derived
+
+    # --- 5. Odds ----------------------------------------------------------
+    # Out-of-range odds are voided (set to NaN), not dropped: the match still
+    # happened and still trains the model — it simply isn't bettable.
+    min_odds = rules.get("min_odds", 1.01)
+    max_odds = rules.get("max_odds", 1000.0)
+    schema = config.get("schema", {})
+    odds_cols = [
+        c for c in schema.get("odds_columns", []) + schema.get("closing_odds_columns", [])
+        if c in out.columns
+    ]
+    voided = 0
+    for col in odds_cols:
+        out[col] = pd.to_numeric(out[col], errors="coerce")
+        bad = out[col].notna() & ((out[col] < min_odds) | (out[col] > max_odds))
+        voided += int(bad.sum())
+        out.loc[bad, col] = np.nan
+    report["odds_values_voided"] = voided
+
+    report["rows_out"] = len(out)
+    return out.reset_index(drop=True), report
+
+
+def drop_duplicate_fixtures(df, config):
+    """Remove repeated fixtures — the same two teams on the same date.
+
+    Duplicates arise from re-downloading a file or from an overlapping season
+    range. Left in, they would double-count those matches in the likelihood and
+    quietly over-weight them.
+    """
+    rules = config.get("validation", {})
+    if not rules.get("drop_duplicate_fixtures", True):
+        return df, 0
+
+    key = ["MatchDate", "HomeTeam", "AwayTeam"]
+    duplicated = df.duplicated(subset=key, keep="first")
+    return df[~duplicated].reset_index(drop=True), int(duplicated.sum())
+
+
+def to_canonical(df, config):
+    """Map a cleaned frame onto the canonical schema and sort it by date.
+
+    Missing optional columns (shots, odds) are created as NaN so every canonical
+    frame has the same shape, whatever the source file happened to contain.
+    """
+    renames = dict(canonical.BASE_RENAMES)
+    renames.update(canonical.odds_renames(config))
+
+    out = df.rename(columns=renames)
+
+    # A stable identifier, built from facts that cannot change for a given match.
+    # Used for joins, for de-duplication across runs, and for tracing a bet in
+    # the Phase 6 backtest back to its fixture.
+    league = out["League"] if "League" in out.columns else "NA"
+    season = out["Season"] if "Season" in out.columns else "NA"
+    out["MatchID"] = (
+        pd.Series(league, index=out.index).astype(str) + "_"
+        + pd.Series(season, index=out.index).astype(str) + "_"
+        + out["MatchDate"].dt.strftime("%Y%m%d") + "_"
+        + out["HomeTeam"].str.replace(" ", "", regex=False) + "_"
+        + out["AwayTeam"].str.replace(" ", "", regex=False)
+    )
+
+    for column in canonical.CANONICAL_COLUMNS:
+        if column not in out.columns:
+            out[column] = np.nan
+
+    out = out[canonical.CANONICAL_COLUMNS]
+
+    # Chronological order matters from here on: Phase 6 walks forward through
+    # time, and an out-of-order frame is the easiest way to leak the future.
+    out = out.sort_values("MatchDate").reset_index(drop=True)
+
+    missing_required = [
+        c for c in canonical.REQUIRED_CANONICAL if out[c].isna().any()
+    ]
+    if missing_required:
+        raise DataQualityError(
+            f"Canonical columns contain nulls where none are allowed: {missing_required}"
+        )
+    return out
+
+
+def quality_report(report, df=None):
+    """Render the counts collected during cleaning as readable text."""
+    lines = ["Data-quality report", "-" * 19]
+    order = [
+        ("rows_in", "rows read"),
+        ("dropped_unparseable_date", "dropped: unparseable date"),
+        ("dropped_implausible_goals", "dropped: impossible goal values"),
+        ("duplicate_fixtures_dropped", "dropped: duplicate fixtures"),
+        ("whitespace_trimmed_HomeTeam", "fixed: whitespace in HomeTeam"),
+        ("whitespace_trimmed_AwayTeam", "fixed: whitespace in AwayTeam"),
+        ("result_mismatches_corrected", "fixed: result disagreed with goals"),
+        ("odds_values_voided", "voided: odds outside plausible range"),
+        ("rows_out", "rows kept"),
+    ]
+    for key, label in order:
+        if key in report:
+            lines.append(f"  {label:<38} {report[key]:>6,}")
+
+    if report.get("rows_in"):
+        kept = report.get("rows_out", 0) / report["rows_in"]
+        lines.append(f"  {'share of rows kept':<38} {kept:>6.1%}")
+
+    for note in report.get("notes", []):
+        lines.append(f"  note: {note}")
+
+    if df is not None and len(df):
+        lines.append("")
+        lines.append(f"  canonical table: {len(df):,} matches x {len(df.columns)} columns")
+        lines.append(
+            f"  date coverage:   {df['MatchDate'].min():%d %b %Y}"
+            f" -> {df['MatchDate'].max():%d %b %Y}"
+        )
+        teams = pd.unique(df[["HomeTeam", "AwayTeam"]].values.ravel())
+        lines.append(f"  teams:           {len(teams)}")
+        for col in ("OddsH", "CloseH"):
+            if col in df.columns:
+                usable = df[col].notna().mean()
+                lines.append(f"  {col} present:   {usable:.1%} of matches")
+    return "\n".join(lines)
+
+
+def save_canonical(df, config, filename=None):
+    """Write the canonical table to data/processed/ and return the path.
+
+    CSV rather than a binary format, deliberately: it can be opened and checked
+    by anyone, including in a code review, with no extra dependency.
+    """
+    rules = config.get("validation", {})
+    out_dir = _resolve(config["data"].get("processed_dir", "data/processed"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / (filename or rules.get("canonical_filename", "matches.csv"))
+    df.to_csv(path, index=False)
+    return path
+
+
+def run_ingest(df_raw, config, save=True):
+    """Run the whole Phase 1 flow and return (canonical_df, report_dict).
+
+    Keeping the orchestration here, rather than in the pipeline script, means the
+    tests exercise exactly the code the pipeline runs.
+    """
+    rules = config.get("validation", {})
+
+    notes = validate_raw(df_raw, config)
+    cleaned, report = clean(df_raw, config)
+    deduped, n_dupes = drop_duplicate_fixtures(cleaned, config)
+    report["duplicate_fixtures_dropped"] = n_dupes
+    report["rows_out"] = len(deduped)
+    report["notes"] = notes
+
+    # The guard that turns a quiet disaster into a loud one: if most of the file
+    # has been thrown away, something is wrong with the source, not the matches.
+    dropped_fraction = 1 - (report["rows_out"] / report["rows_in"])
+    limit = rules.get("max_dropped_fraction", 0.05)
+    if dropped_fraction > limit:
+        raise DataQualityError(
+            f"Dropped {dropped_fraction:.1%} of rows, above the {limit:.0%} limit. "
+            "Inspect the raw file before continuing — do not relax this silently."
+        )
+
+    table = to_canonical(deduped, config)
+
+    if save:
+        report["saved_to"] = str(save_canonical(table, config))
+
+    return table, report

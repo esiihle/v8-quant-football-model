@@ -58,6 +58,34 @@ Observed when loading the real files, and handled in `src/ingest.py`:
   bettable and will be excluded at the staking stage, not silently imputed.
 - Encoding is not always UTF-8, so the loader falls back to latin-1.
 
+### 1.4 The canonical table (Phase 1, 2 Oct 2026)
+
+Raw files are never read by anything downstream. Phase 1 validates and cleans
+them into one canonical table (`data/processed/matches.csv`), defined in
+`src/canonical.py`:
+
+`MatchID, MatchDate, League, Season, HomeTeam, AwayTeam, HomeGoals, AwayGoals,
+Result, HomeShots, AwayShots, HomeShotsOT, AwayShotsOT, OddsH, OddsD, OddsA,
+CloseH, CloseD, CloseA`
+
+Rules applied, each counted in the data-quality report:
+
+| Problem | What happens | Why |
+|---|---|---|
+| Required column missing | run stops | nothing downstream can be trusted |
+| Date won't parse | row dropped | a match with no date can't be ordered in time |
+| Goals impossible (<0 or >15) | row dropped | a data error, not a result |
+| `FTR` disagrees with the goals | **result recomputed**, mismatch counted | goals are the primary record |
+| Team name has stray whitespace | trimmed | otherwise one team becomes two |
+| Odds outside 1.01–1000 | price voided (NaN), row kept | the match still trains the model; it just isn't bettable |
+| Same date + same two teams | duplicate dropped | otherwise that match is double-counted in the likelihood |
+| More than 5% of rows unusable | run stops | quiet degradation is worse than a loud failure |
+
+The table is sorted by date, because Phase 6 walks forward through time and an
+out-of-order frame is the easiest possible way to leak the future into a
+backtest. `MatchID` is built from league, season, date and both teams, so it is
+stable across re-downloads and lets a bet in the backtest be traced to a fixture.
+
 Still to be settled: the exact de-vig method (proportional vs. Shin), before
 Phase 5 staking.
 

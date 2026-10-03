@@ -4,12 +4,12 @@
 > session. This is the fastest way to resume: read this file (plus `docs/ROADMAP.md`)
 > and you know exactly where the project stands. Newest entry at the top.
 
-**Current phase:** Phase 0 complete (Sep 28 – Oct 4); Phase 1 opens 5 Oct
+**Current phase:** Phase 1 — Data pipeline & validation (Oct 5 – Oct 18), started early
 **Overall status:** 🟢 Pipeline runs end-to-end on **real** EPL data; tests green (6);
 exploration notebook written and run.
-**Next action:** Implement strict schema validation in `src/ingest.py` (the
-`PHASE 1` marker) — types, date parsing, duplicate fixtures, goal/result checks —
-and a data-quality report.
+**Next action:** Run the exploration notebook and fill in its findings table
+(carried over from 1 Oct), then review the Phase 1 data-quality report against
+what the notebook shows.
 **Schedule:** baselined from 28 Sep 2026; target presentation **18 Dec 2026**.
 **Cadence:** one commit per working day (missed 29 Sep — first and last).
 
@@ -39,13 +39,40 @@ and a data-quality report.
 pip install -r requirements.txt
 python scripts/run_pipeline.py     # real data from data/raw if present, else the sample
 python scripts/run_pipeline.py --sample   # force the bundled sample
-pytest                             # 6 smoke tests, all green
+pytest                             # 18 tests (smoke + Phase 1 ingest), all green
+python scripts/run_pipeline.py --no-save  # run the checks without writing output
 # notebooks/01_exploration.ipynb   # open in VS Code, Run All
 ```
 
 ---
 
 ## Session log
+
+### 2026-10-02 — Phase 1: validation, cleaning, canonical table
+- `src/canonical.py` (new): the canonical column contract — names, order, the
+  raw→canonical mapping, and which columns may never be null. Downstream stages
+  read these names and never a raw source column like `FTHG`, so a change of data
+  source touches one file.
+- `src/ingest.py`: Phase 1 flow — `validate_raw` → `clean` → `drop_duplicate_fixtures`
+  → `to_canonical` → `save_canonical`, orchestrated by `run_ingest`.
+  - Structural faults (missing required column, empty input) raise `DataQualityError`.
+  - Cleaning: date parsing, team-name whitespace, impossible goals dropped,
+    **result recomputed from goals** rather than trusted, out-of-range odds voided.
+  - Duplicate fixtures (same date + same two teams) dropped and counted.
+  - `MatchID` added: league_season_date_home_away — stable, unique, traceable.
+  - Guard rail: if more than `validation.max_dropped_fraction` (5%) of rows would
+    be discarded, the run stops rather than quietly continuing on a broken file.
+- `config.yaml`: new `validation` block — every threshold is configuration, not
+  a number buried in code.
+- `scripts/run_pipeline.py`: runs Phase 1 and prints the data-quality report;
+  writes `data/processed/matches.csv` (`--no-save` to skip).
+- `tests/test_ingest.py` (new): 11 behaviour tests, one per defect — missing
+  column, unparseable date, whitespace team name, impossible score, result
+  mismatch, bad price, duplicate fixture, canonical shape/order/uniqueness, and
+  the drop-fraction guard. Suite now 18 green.
+- **Not yet done:** the exploration notebook from 1 Oct still needs to be run and
+  its findings table filled in.
+- **Next:** Phase 2 — features (shrinkage, xG proxy, time decay).
 
 ### 2026-10-01 — Exploration notebook
 - Added `notebooks/01_exploration.ipynb`. It imports from `src/` rather than

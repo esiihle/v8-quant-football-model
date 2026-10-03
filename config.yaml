@@ -41,6 +41,18 @@ schema:
     - PSCD
     - PSCA
 
+# --- Phase 1: validation rules ------------------------------------------------
+# Every rule that decides whether a row is trustworthy lives here, not in code,
+# so the contract can be read and challenged without opening a .py file.
+validation:
+  max_goals: 15              # more than this in one match is a data error, not a rout
+  min_odds: 1.01             # decimal odds below this are impossible
+  max_odds: 1000.0           # above this is a data error or a dead market
+  drop_duplicate_fixtures: true   # same date + same two teams = the same match
+  recompute_result: true     # trust the goals; rebuild H/D/A and report mismatches
+  max_dropped_fraction: 0.05 # if we'd drop more than 5% of rows, stop and shout
+  canonical_filename: matches.csv
+
 # Model settings (placeholders — tuned in their phases).
 model:
   time_decay_half_life_days: 180   # Phase 2/3: exponential recency weighting

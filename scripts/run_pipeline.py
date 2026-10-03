@@ -63,6 +63,8 @@ def main():
     parser.add_argument("--data", default=None, help="Override the input CSV path")
     parser.add_argument("--sample", action="store_true",
                         help="Force the bundled sample instead of data/raw")
+    parser.add_argument("--no-save", action="store_true",
+                        help="Run the checks but don't write the canonical table")
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -106,6 +108,14 @@ def main():
 
     print()
     print(ingest.build_shape_report(df, config))
+
+    # --- Phase 1: validate, clean, canonicalise -----------------------------
+    # Everything downstream reads the canonical table, never the raw frame.
+    print()
+    matches, report = ingest.run_ingest(df, config, save=not args.no_save)
+    print(ingest.quality_report(report, matches))
+    if "saved_to" in report:
+        print(f"\n  canonical table written to: {report['saved_to']}")
     print()
 
     # --- Downstream stages (progressively implemented) ---
