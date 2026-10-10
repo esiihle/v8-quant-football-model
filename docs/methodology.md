@@ -89,31 +89,90 @@ stable across re-downloads and lets a bet in the backtest be traced to a fixture
 Still to be settled: the exact de-vig method (proportional vs. Shin), before
 Phase 5 staking.
 
-## 2. Feature engineering
-**Status: 🟡 skeleton — built in Phase 2.**
+## 2. Feature engineering  *(built 9 Oct 2026)*
+
+One row of model inputs per match: each team's attack and defence strength,
+estimated from recent form, shrunk toward the league average, using goals
+blended with a shots-based expected-goals proxy.
+
+### 2.0 The rule that governs the whole stage
+
+**A match's features may use only matches played strictly before it.**
+
+Every estimate takes an `as_of` date and filters on it; the filter lives in one
+place (`time_weights`) rather than being trusted to each caller. A model that
+has seen the second half of the season while rating a team in October will look
+excellent in a backtest and lose money in practice.
+
+This is not theoretical. The first version of this module fitted the xG
+conversion rate over the whole file, so an August match was scored partly on
+matches played in May. `test_features_do_not_use_the_future` caught it, and
+`blend_goals` now takes `history` as a required argument so the mistake is hard
+to repeat.
 
 ### 2.1 Attack / defence strengths
-Team strengths estimated relative to league average, so that expected goals for a
-fixture combine home attack, away defence, and home advantage.
+
+Relative to the league, where 1.0 is exactly average: attack 1.25 means a quarter
+more goals than a typical team; defence 0.80 means a fifth fewer conceded (lower
+is better). Home and away appearances are pooled, because home advantage is a
+separate parameter fitted in Phase 3 — folding it in here would count it twice.
 
 ### 2.2 Bayesian shrinkage
-Raw strengths for teams with few matches are unstable. We shrink each estimate
-toward the league mean:
 
 $$\hat{\theta}_i^{\text{shrunk}} = w_i\,\hat{\theta}_i + (1 - w_i)\,\bar{\theta},
 \qquad w_i = \frac{n_i}{n_i + k}$$
 
-where $n_i$ is the team's match count and $k$ is a shrinkage strength chosen by
-cross-validation. Small $n_i$ ⇒ small $w_i$ ⇒ heavy pull toward the prior. This
-is the direct analogue of thin-file / low-default-portfolio treatment in credit.
+with $k$ = `features.shrinkage_k` (currently 8). A team with 0 matches is given
+the prior exactly; with 8 it sits halfway; with 38 it is 83% its own record.
+Trust is earned gradually, with no threshold to argue about.
 
-### 2.3 Expected-goals (xG) proxies
-A more stable performance signal than realised goals, approximated from shot
-volume and shot quality where the data allows. To be specified in Phase 2.
+$n_i$ is the **effective** sample size — the sum of time-decay weights, not a row
+count. Ten matches from last season carry far less than ten matches' worth of
+evidence, and the shrinkage should know that.
+
+This is the direct analogue of a thin-file adjustment or a low-default-portfolio
+treatment in credit risk: same formula, same argument, different quantity.
+
+### 2.3 Expected-goals proxy
+
+Goals are the truth but are rare and noisy — a 1-0 win and a 1-0 loss look
+identical in the table and nothing alike on the pitch. Shots on target are far
+more plentiful. The feature blends them:
+
+    attack_goals = (1 - w) * goals + w * (shots_on_target * conversion_rate)
+
+with $w$ = `features.xg_weight` (currently 0.5). The conversion rate is measured
+**from past matches only**, separately for home and away sides, so it reflects
+this league and era rather than a constant from a paper — and so that home
+advantage is not smuggled in a second time.
+
+Where shot data is absent (the bundled sample, some older seasons), the feature
+falls back to actual goals and says so in the run report rather than inventing a
+figure.
 
 ### 2.4 Time decay
-Recent matches weigh more via exponential decay with half-life parameter $\xi$:
-$\;\phi(t) = \exp(-\xi\,\Delta t)$. Enters the likelihood in §3.3.
+
+$$w(\Delta t) = 0.5^{\,\Delta t / H}$$
+
+with $H$ = `features.half_life_days` (currently 180, about half a season). A
+match played today counts 1.000, one a season old 0.500, two seasons old 0.250.
+Anything dated on or after `as_of` gets weight 0 — that is where the lookahead
+guard lives.
+
+### 2.5 Warm-up rows
+
+A match played before either team has `features.min_prior_matches` of history is
+flagged `HasSufficientHistory = False`, not deleted. Phase 3 decides whether to
+train on them. One place decides what enters the model.
+
+A team never seen before (a promoted side) is given the prior, not a null: an
+unknown team is an average team until it shows otherwise.
+
+### 2.6 Output
+
+`data/processed/features.csv`, one row per match, in `FEATURE_COLUMNS` order,
+carrying the strengths, the history counts, the outcome, and both odds sets for
+Phases 5 and 6.
 
 ## 3. The Dixon-Coles model
 **Status: 🟡 skeleton — built and tested in Phase 3.**

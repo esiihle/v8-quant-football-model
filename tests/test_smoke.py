@@ -62,9 +62,12 @@ def test_missing_required_column_fails_loudly():
 
 
 def test_downstream_stages_declared_but_pending():
-    """Every downstream stage exists and cleanly signals 'not built yet'."""
+    """Every stage NOT YET BUILT exists and cleanly signals 'not built yet'.
+
+    Stages drop off this list as they are implemented: features left it in
+    Phase 2 (9 Oct 2026) and is now covered by tests/test_features.py.
+    """
     for call in (
-        lambda: features.build_features(None),
         lambda: dixon_coles.fit(None),
         lambda: calibrate.calibrate(None, None),
         lambda: staking.stake(None, None),

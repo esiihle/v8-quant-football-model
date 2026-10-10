@@ -4,7 +4,7 @@
 > session. This is the fastest way to resume: read this file (plus `docs/ROADMAP.md`)
 > and you know exactly where the project stands. Newest entry at the top.
 
-**Current phase:** Phase 1 — Data pipeline & validation (Oct 5 – Oct 18), started early
+**Current phase:** Phase 2 — Feature engineering (Oct 19 – Nov 1), started early
 **Overall status:** 🟢 Pipeline runs end-to-end on **real** EPL data; tests green (6);
 exploration notebook written and run.
 **Next action:** Run the exploration notebook and fill in its findings table
@@ -39,7 +39,7 @@ what the notebook shows.
 pip install -r requirements.txt
 python scripts/run_pipeline.py     # real data from data/raw if present, else the sample
 python scripts/run_pipeline.py --sample   # force the bundled sample
-pytest                             # 18 tests (smoke + Phase 1 ingest), all green
+pytest                             # 37 tests (smoke + Phases 1-2), all green
 python scripts/run_pipeline.py --no-save  # run the checks without writing output
 # notebooks/01_exploration.ipynb   # open in VS Code, Run All
 ```
@@ -47,6 +47,34 @@ python scripts/run_pipeline.py --no-save  # run the checks without writing outpu
 ---
 
 ## Session log
+
+### 2026-10-09 — Phase 2: features (shrinkage, time decay, xG proxy)
+- `src/features.py` built: `time_weights`, `shrink`, `conversion_rates`,
+  `blend_goals`, `team_strengths`, `build_features`, `feature_report`,
+  `save_features`.
+- **A real lookahead leak was found and fixed during the build.** The first
+  version fitted the xG conversion rate over the whole file, so an August match
+  was scored partly on matches played in May. `test_features_do_not_use_the_future`
+  caught it. `blend_goals` now requires `history` as an argument, and the
+  conversion rate is recomputed per match date from past matches only.
+- Shrinkage uses the **effective** sample size (sum of time-decay weights), not a
+  row count — ten matches from last season are not ten matches' worth of evidence.
+- Warm-up rows flagged, not deleted; unknown teams get the prior, not a null.
+- `notebooks/02_features.ipynb` (new): the Phase 2 "done when" deliverable — the
+  shrinkage toy example verifiable by hand (n = k lands exactly halfway), the
+  decay curve with its checkable points, the real strength table, an
+  attack-vs-defence chart, and a lookahead check run in the open.
+- `tests/test_features.py` (new): 19 tests — half-life weighting, future weight
+  zero, shrinkage identities (n=0 is the prior, n=k is halfway, monotone in n,
+  harsher k shrinks more), xG blend and its fallback, better team rates better,
+  matrix shape, warm-up flags, unknown team prior, determinism, history-only
+  conversion rate, and the lookahead test. Suite now 37 green.
+- `config.yaml`: `features` block — `shrinkage_k`, `half_life_days`, `xg_weight`,
+  `min_prior_matches`, `feature_filename`.
+- `scripts/run_pipeline.py`: Stage 2 runs and writes `data/processed/features.csv`.
+- **Still outstanding:** `notebooks/01_exploration.ipynb` has not been run and its
+  findings table is unfilled.
+- **Next:** Phase 3 — Dixon-Coles fit by maximum likelihood.
 
 ### 2026-10-02 — Phase 1: validation, cleaning, canonical table
 - `src/canonical.py` (new): the canonical column contract — names, order, the

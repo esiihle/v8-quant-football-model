@@ -118,17 +118,26 @@ def main():
         print(f"\n  canonical table written to: {report['saved_to']}")
     print()
 
+    # --- Phase 2: features, built strictly out of sample ---------------------
+    print("Stage 2 — Feature engineering")
+    feature_matrix, feature_rep = features.build_features(matches, config)
+    print(features.feature_report(feature_matrix, feature_rep))
+    if not args.no_save:
+        path = features.save_features(feature_matrix, config)
+        print(f"\n  feature matrix written to: {path}")
+    print()
+
     # --- Downstream stages (progressively implemented) ---
     print("Downstream stages:")
-    feats = _run_stage("Stage 2 — Features", features.build_features, df, config)
-    model = _run_stage("Stage 3 — Dixon-Coles fit", dixon_coles.fit, feats, config)
+    model = _run_stage("Stage 3 — Dixon-Coles fit", dixon_coles.fit, feature_matrix, config)
     _run_stage("Stage 4 — Calibration", calibrate.calibrate, None, None, config)
     _run_stage("Stage 5 — Staking", staking.stake, None, None, config)
     _run_stage("Stage 6 — Backtest", backtest.walk_forward, df, config)
     _run_stage("Stage 6 — CLV", clv.compute_clv, None, None)
     _run_stage("Stage 6 — Metrics", metrics.summarise, None)
 
-    print("\nPhase 0 complete: pipeline runs end-to-end and reports stage status.")
+    print("\nPhases 0-2 complete: canonical table and feature matrix built;"
+          " stages 3-6 report status only.")
 
 
 if __name__ == "__main__":
