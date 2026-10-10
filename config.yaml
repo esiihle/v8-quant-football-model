@@ -83,6 +83,18 @@ model:
   time_decay_half_life_days: 180   # Phase 3: likelihood weighting (see features.half_life_days)
   max_goals: 10                    # Phase 3: score-matrix truncation
 
+  # L2 penalty on attack/defence parameters. This is Phase 2's Bayesian
+  # shrinkage expressed as regularisation: with no evidence a team is pulled
+  # toward 0, which on this log scale is exactly league average. Higher = more
+  # sceptical. The direct analogue of a ridge-penalised PD model.
+  penalty: 0.01
+
+  # The optimiser runs from this many starting points. Agreement between them is
+  # the evidence that the optimum found is global rather than lucky.
+  n_starts: 3
+  max_iterations: 500
+  model_filename: dixon_coles.json
+
 # Staking settings (used from Phase 5).
 staking:
   kelly_fraction: 0.25             # fractional Kelly (quarter) to blunt variance

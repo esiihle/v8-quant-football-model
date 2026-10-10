@@ -25,6 +25,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import pandas as pd
+
 # Make the repo root importable whether this is run from the root or elsewhere.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
@@ -127,9 +129,41 @@ def main():
         print(f"\n  feature matrix written to: {path}")
     print()
 
+    # --- Phase 3: Dixon-Coles fit by penalised, time-weighted MLE ------------
+    print("Stage 3 — Dixon-Coles fit")
+
+    # Phase 2's shrunk strengths seed the optimiser: a cheap, stable estimate is
+    # a far better starting point than a flat guess. The two phases are not
+    # rivals — Phase 2 describes, Phase 3 fits.
+    blended, _ = features.blend_goals(matches, matches, config)
+    seed_strengths = features.team_strengths(
+        blended, as_of=matches["MatchDate"].max() + pd.Timedelta(days=1), config=config
+    )
+
+    model = dixon_coles.fit(matches, config, seed_strengths=seed_strengths)
+    print(dixon_coles.fit_report(model))
+
+    # A worked example: price the most recent fixture end to end.
+    latest = matches.sort_values("MatchDate").tail(1)
+    priced = dixon_coles.predict(model, latest, config)
+    row = priced.iloc[0]
+    print()
+    print(f"  Worked example — {row['HomeTeam']} vs {row['AwayTeam']}:")
+    print(f"    expected goals   {row['ExpectedHomeGoals']:.2f} - "
+          f"{row['ExpectedAwayGoals']:.2f}")
+    print(f"    1X2              {row['home_win']:.1%} / {row['draw']:.1%} / "
+          f"{row['away_win']:.1%}")
+    print(f"    over 2.5 goals   {row['over_2_5']:.1%}")
+    print(f"    both teams score {row['btts_yes']:.1%}")
+    print(f"    most likely      {row['MostLikelyScore']}")
+
+    if not args.no_save:
+        model_path = dixon_coles.save_model(model, config)
+        print(f"\n  fitted model written to: {model_path}")
+    print()
+
     # --- Downstream stages (progressively implemented) ---
     print("Downstream stages:")
-    model = _run_stage("Stage 3 — Dixon-Coles fit", dixon_coles.fit, feature_matrix, config)
     _run_stage("Stage 4 — Calibration", calibrate.calibrate, None, None, config)
     _run_stage("Stage 5 — Staking", staking.stake, None, None, config)
     _run_stage("Stage 6 — Backtest", backtest.walk_forward, df, config)

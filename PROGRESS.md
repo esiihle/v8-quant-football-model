@@ -4,7 +4,7 @@
 > session. This is the fastest way to resume: read this file (plus `docs/ROADMAP.md`)
 > and you know exactly where the project stands. Newest entry at the top.
 
-**Current phase:** Phase 2 — Feature engineering (Oct 19 – Nov 1), started early
+**Current phase:** Phase 3 — Dixon-Coles model (Nov 2 – Nov 15), started early
 **Overall status:** 🟢 Pipeline runs end-to-end on **real** EPL data; tests green (6);
 exploration notebook written and run.
 **Next action:** Run the exploration notebook and fill in its findings table
@@ -39,7 +39,7 @@ what the notebook shows.
 pip install -r requirements.txt
 python scripts/run_pipeline.py     # real data from data/raw if present, else the sample
 python scripts/run_pipeline.py --sample   # force the bundled sample
-pytest                             # 37 tests (smoke + Phases 1-2), all green
+pytest                             # 61 tests (smoke + Phases 1-3), all green
 python scripts/run_pipeline.py --no-save  # run the checks without writing output
 # notebooks/01_exploration.ipynb   # open in VS Code, Run All
 ```
@@ -47,6 +47,48 @@ python scripts/run_pipeline.py --no-save  # run the checks without writing outpu
 ---
 
 ## Session log
+
+### 2026-10-10 — Phase 3: Dixon-Coles fit by penalised, time-weighted MLE
+- `src/dixon_coles.py` built: `tau`, `rho_bounds`, `goal_ceiling`,
+  `expected_goals`, `log_likelihood`, `fit`, `score_matrix`,
+  `market_probabilities`, `predict`, `fit_report`, `save_model` / `load_model`.
+- Identifiability by forcing attack parameters to sum to zero (n-1 free).
+- L2 penalty on strengths = Phase 2's shrinkage as regularisation; Phase 2's
+  shrunk strengths seed the optimiser as its first starting point.
+- Multi-start fitting, with the objective spread across starts reported —
+  agreement is the evidence the optimum is global, not lucky.
+- One fit prices 1X2, over/under 2.5 and BTTS from the same score matrix, so
+  the markets are automatically consistent.
+
+#### Two bugs found by tests, both invisible in the output
+1. **`+inf` for invalid parameters broke the optimiser.** L-BFGS-B uses
+   finite-difference gradients, so `inf - inf = nan` and the fit stopped
+   improving *while reporting success*. Parameter recovery was r = 0.21 with no
+   error anywhere. Invalid points now cost a large FINITE amount that grows with
+   the violation.
+2. **The rho box was sized from a theoretical 55-goals-a-match ceiling**, which
+   squeezed it to [-0.018, 0.0003] and left rho pinned on the lower edge. The
+   tell: the bias did not shrink as the sample grew — noise averages out, a
+   binding constraint does not. The box is now sized from observed goals, and
+   the fit reports `rho_at_bound`.
+
+- After both fixes, recovery on simulated data: attack r = 0.99, defence
+  r = 0.98, rho -0.084 against a true -0.080 at 2,400 matches.
+- `tests/test_dixon_coles.py` (new): 24 tests in three groups — identities (tau
+  formulas against the paper, mass preservation to 1e-12, rho = 0 reduces to
+  independent Poisson, every market sums to 1), recovery (known parameters
+  refound, sum-to-zero holds, gamma positive, starts agree, penalty shrinks
+  spread), and discipline (`as_of` respected, no-history fit fails loudly), plus
+  four regression tests pinning the two bugs above. Suite now 61 green.
+- `config.yaml`: `model.penalty`, `model.n_starts`, `model.max_iterations`,
+  `model.model_filename`.
+- `scripts/run_pipeline.py`: Stage 3 fits, reports diagnostics, prices the most
+  recent fixture as a worked example, and writes `data/processed/dixon_coles.json`.
+- **Still outstanding:** `notebooks/01_exploration.ipynb` has not been run. Its
+  measured low-score departures are what the fitted rho should be consistent
+  with — a free sanity check on this phase.
+- **Next:** Phase 4 — probability calibration (isotonic / Platt, reliability
+  diagrams, Brier and log-loss).
 
 ### 2026-10-09 — Phase 2: features (shrinkage, time decay, xG proxy)
 - `src/features.py` built: `time_weights`, `shrink`, `conversion_rates`,

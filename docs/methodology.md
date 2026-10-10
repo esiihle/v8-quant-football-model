@@ -174,43 +174,122 @@ unknown team is an average team until it shows otherwise.
 carrying the strengths, the history counts, the outcome, and both odds sets for
 Phases 5 and 6.
 
-## 3. The Dixon-Coles model
-**Status: 🟡 skeleton — built and tested in Phase 3.**
+## 3. The Dixon-Coles model  *(built 10 Oct 2026)*
 
-### 3.1 Independent-Poisson baseline
-Expected goals for a fixture (home team $i$, away team $j$):
+### 3.1 The model
+
+Each team carries an attack parameter $\alpha_i$ and a defence parameter
+$\beta_i$; there is one global home advantage $\gamma$ and one dependence
+parameter $\rho$. For a fixture (home $i$, away $j$):
 
 $$\lambda = \exp(\alpha_i + \beta_j + \gamma), \qquad
-  \mu = \exp(\alpha_j + \beta_i)$$
-
-with $x \sim \text{Poisson}(\lambda)$, $y \sim \text{Poisson}(\mu)$ as the
-starting point.
-
-### 3.2 The low-score dependence correction
-Independent Poisson misprices the low-score outcomes (0-0, 1-0, 0-1, 1-1).
-Dixon-Coles multiply the joint mass by a correction $\tau_{\rho}(x, y)$ governed
-by a single dependence parameter $\rho$:
+  \mu     = \exp(\alpha_j + \beta_i)$$
 
 $$P(X = x, Y = y) = \tau_{\rho}(x, y)\;
   \frac{\lambda^{x} e^{-\lambda}}{x!}\,\frac{\mu^{y} e^{-\mu}}{y!}$$
 
-where $\tau_{\rho}$ adjusts only the four low-score cells and equals 1 elsewhere.
-Exact form to be documented alongside the implementation.
+Parameters live on a log scale, so $e^{\alpha}$ reads as a multiplier: attack
+1.30 means a team scores 30% more than league average.
 
-### 3.3 Time-weighted maximum likelihood
-Parameters $\{\alpha_i, \beta_i, \gamma, \rho\}$ are fitted by maximising the
-time-weighted log-likelihood:
+### 3.2 The low-score correction
 
-$$\mathcal{L} = \sum_{m} \phi(t_m)\,\log P(X = x_m, Y = y_m)$$
+Independent Poisson is almost right, and measurably wrong in one place — the
+four lowest scorelines. Real football produces more 0-0 and 1-1 draws and fewer
+1-0 and 0-1 results than independence predicts, which §2 of
+`notebooks/01_exploration.ipynb` measures on our own data before any model is
+fitted. Dixon and Coles (1997) correct it with one parameter:
 
-with a sum-to-zero (or mean-zero) identifiability constraint on the strengths.
-Optimiser, constraints, and multi-start strategy documented in Phase 3 — this is
-the section most likely to need care for numerical stability.
+$$\tau_{\rho}(x,y) = \begin{cases}
+  1 - \lambda\mu\rho & x = 0, y = 0 \\
+  1 + \lambda\rho    & x = 0, y = 1 \\
+  1 + \mu\rho        & x = 1, y = 0 \\
+  1 - \rho           & x = 1, y = 1 \\
+  1                  & \text{otherwise}
+\end{cases}$$
 
-### 3.4 From parameters to market probabilities
-The fitted model gives a full score matrix $P(X = x, Y = y)$, from which every
-market (1X2, over/under, correct score, etc.) is derived by summing the relevant
-cells. Details in Phase 3.
+A negative $\rho$ raises 0-0 and 1-1 while lowering 1-0 and 0-1 — the direction
+the data asks for. The correction is **mass-preserving**: the four adjustments
+cancel exactly, so the distribution still sums to 1. That is a property of the
+construction, not of our code, and
+`test_tau_correction_preserves_total_probability` checks it to 1e-12.
+
+Validity requires
+$\max(-1/\lambda, -1/\mu) \le \rho \le \min(1/(\lambda\mu), 1)$; outside that
+range the model assigns a negative probability to a scoreline.
+
+### 3.3 Fitting: penalised, time-weighted maximum likelihood
+
+$$\mathcal{L} = \sum_{m} \phi(t_m)\,\log P(X = x_m, Y = y_m)
+  \; - \; \kappa \sum_i (\alpha_i^2 + \beta_i^2)$$
+
+with $\phi$ the exponential time-decay weight from §2.4 and $\kappa$ =
+`model.penalty`.
+
+**Identifiability.** $\lambda$ and $\mu$ depend only on sums such as
+$\alpha_i + \beta_j$, so adding a constant to every attack and subtracting it
+from every defence changes nothing. One constraint fixes it: the attack
+parameters are forced to sum to zero, and the optimiser works with $n-1$ free
+attacks.
+
+**The penalty is Phase 2's shrinkage, restated.** An L2 term pulls a team's
+parameters toward 0, which on this scale is exactly league average, and it binds
+hardest where there is least evidence. Same argument as the Bayesian shrinkage in
+§2.2, expressed in the language of an optimiser, and the direct analogue of a
+ridge-penalised PD model in credit risk.
+
+**Phase 2 seeds the optimiser.** The shrunk strengths are converted to this log
+scale and used as the first starting point. A cheap, stable estimate is a far
+better start than a flat guess; the phases are complementary, not competing.
+
+**Multi-start.** The fit runs from `model.n_starts` starting points and reports
+the spread of the objective across them. Agreement is the evidence that the
+optimum is global rather than lucky; disagreement raises a warning in the run
+report, because a fit nobody can reproduce is not a fit.
+
+### 3.4 Two bugs worth recording
+
+Both were invisible in the output and both were caught by tests, not by reading
+the numbers. The roadmap predicted this phase would be where numerical care was
+needed, and it was right.
+
+**An infinite objective breaks the optimiser.** The first version returned
+`+inf` for an invalid parameter set. L-BFGS-B estimates its gradient by finite
+differences, so a single infinite probe gives `inf - inf = nan`, the gradient
+becomes unusable, and the optimiser stops improving *while still reporting
+success*. Parameter recovery came back at $r = 0.21$ and nothing raised an
+error. An invalid point now costs a large but finite amount that grows with the
+size of the violation, so there is always a route back downhill.
+
+**A "safe" bound became a binding constraint.** The $\rho$ box was sized from the
+largest $\lambda$ the strength box could theoretically produce —
+$e^{1.5+1.5+1.0} \approx 55$ goals a match. That squeezed the box to
+$[-0.018,\ 0.0003]$, and $\rho$ sat pinned on the lower edge while the fit
+reported success and the starts agreed with each other. The tell was that **the
+bias did not shrink as the sample grew**: noise averages out, a binding
+constraint does not. The box is now sized from the goals actually observed, the
+exact per-fixture constraint is left to the smooth penalty, and the fit reports
+`rho_at_bound` so the same failure would announce itself.
+
+### 3.5 From parameters to market probabilities
+
+The fit gives a full score matrix $P(X=x, Y=y)$ truncated at `model.max_goals`
+and renormalised for the lost tail. Every market is then a sum over cells:
+
+| Market | Cells |
+|---|---|
+| home win / draw / away win | $x>y$ / $x=y$ / $x<y$ |
+| over / under 2.5 goals | $x+y\ge3$ / $x+y\le2$ |
+| both teams to score | $x\ge1 \wedge y\ge1$ |
+| correct score | the cell itself |
+
+This is the real payoff of modelling the whole scoreline distribution rather than
+the result alone: one fit prices every market, and they are automatically
+consistent with one another.
+
+A fixture involving a team absent from the training data is priced at
+league-average parameters rather than rejected — a promoted side must be
+priceable on debut — and flagged `KnownTeams = False`, so Phase 5 can decline to
+stake on a fixture the model does not really know.
 
 ## 4. Calibration
 **Status: 🟡 skeleton — built in Phase 4.**
