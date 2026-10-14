@@ -4,7 +4,7 @@
 > session. This is the fastest way to resume: read this file (plus `docs/ROADMAP.md`)
 > and you know exactly where the project stands. Newest entry at the top.
 
-**Current phase:** Phase 3 — Dixon-Coles model (Nov 2 – Nov 15), started early
+**Current phase:** Phase 4 — Calibration (Nov 16 – Nov 22), started early
 **Overall status:** 🟢 Pipeline runs end-to-end on **real** EPL data; tests green (6);
 exploration notebook written and run.
 **Next action:** Run the exploration notebook and fill in its findings table
@@ -39,7 +39,7 @@ what the notebook shows.
 pip install -r requirements.txt
 python scripts/run_pipeline.py     # real data from data/raw if present, else the sample
 python scripts/run_pipeline.py --sample   # force the bundled sample
-pytest                             # 61 tests (smoke + Phases 1-3), all green
+pytest                             # 87 tests (smoke + Phases 1-4), all green
 python scripts/run_pipeline.py --no-save  # run the checks without writing output
 # notebooks/01_exploration.ipynb   # open in VS Code, Run All
 ```
@@ -47,6 +47,49 @@ python scripts/run_pipeline.py --no-save  # run the checks without writing outpu
 ---
 
 ## Session log
+
+### 2026-10-13 — Phase 4: probability calibration
+- `src/metrics.py` **partially built**: the proper scoring rules land now
+  (Brier, log-loss, multiclass versions, base-rate baseline); the betting
+  metrics still belong to Phase 6, so `metrics.summarise` remains a stub.
+- `src/calibrate.py` built: `reliability_table`, `expected_calibration_error`,
+  `fit_calibrator` / `apply_calibrator` (Platt and isotonic),
+  `fit_multiclass` / `apply_multiclass`, `renormalisation_cost`,
+  `split_by_time`, `evaluate`, `compare_methods`, `calibration_report`,
+  `save_calibration` / `load_calibration`.
+- **Calibration is fitted on the earlier half and judged on the later half.** A
+  map scored on the predictions it was fitted to always looks good because it
+  has seen the answers. `test_in_sample_calibration_flatters_itself` demonstrates
+  the gap rather than asserting it.
+- **An interface bug caught while wiring:** the probability columns are
+  `home_win`/`draw`/`away_win` but the results are coded `H`/`D`/`A`. The first
+  version of the multiclass metrics conflated the two and would have scored the
+  wrong thing silently. Every multi-outcome metric now takes an explicit
+  `{column: label}` mapping, and `test_mismatched_labels_are_rejected` pins it.
+- **Platt vs isotonic, measured out of sample on the first real run:** Platt
+  +0.0018 log-loss, isotonic **-0.0129** — isotonic made the model worse, which
+  is exactly the overfitting the docs predicted for a ~336-match fitting window
+  split three ways. The choice of method is now evidence, not assertion.
+- Three outcomes are calibrated separately and renormalised; the size of that
+  approximation is measured by `renormalisation_cost` rather than hidden.
+- Reliability bands are judged against **three standard errors of their own
+  count**, not a flat tolerance — a 200-match band has a standard error of 0.035,
+  so a 0.06 gap there is noise while the same gap in a 2,000-match band is real.
+- `tests/test_calibrate.py` (new): 26 tests — Brier and log-loss by hand,
+  log-loss punishing confident misses, zero-probability survival, multiclass by
+  hand, mismatched labels rejected, baseline floor, reliability and ECE on a
+  known-calibrated model, ECE detecting bias, Platt correcting overconfidence,
+  isotonic correcting a shape Platt cannot, JSON round trips, single-class and
+  unknown-method guards, renormalisation measured, chronological split enforced,
+  out-of-sample improvement, in-sample flattery demonstrated. Suite now 87 green.
+- `config.yaml`: `calibration` block — `method`, `fit_fraction`,
+  `reliability_bins`, `calibration_filename`.
+- `scripts/run_pipeline.py`: Stage 4 prices every match with sufficient history,
+  reports before/after out of sample with a PASS/FAIL verdict, compares both
+  methods, and degrades cleanly on the bundled sample.
+- **Still outstanding:** `notebooks/01_exploration.ipynb` has not been run.
+- **Next:** Phase 5 — staking (value detection, fractional Kelly, bankroll
+  simulation).
 
 ### 2026-10-10 — Phase 3: Dixon-Coles fit by penalised, time-weighted MLE
 - `src/dixon_coles.py` built: `tau`, `rho_bounds`, `goal_ceiling`,

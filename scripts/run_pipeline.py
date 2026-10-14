@@ -162,9 +162,41 @@ def main():
         print(f"\n  fitted model written to: {model_path}")
     print()
 
+    # --- Phase 4: calibration, judged out of sample --------------------------
+    print("Stage 4 — Probability calibration")
+
+    # Price every match that the model has enough history to price, then fit the
+    # calibration map on the earlier half and judge it on the later half.
+    priceable = feature_matrix[feature_matrix["HasSufficientHistory"]].copy()
+    all_predictions = dixon_coles.predict(model, priceable, config)
+    all_predictions["MatchDate"] = priceable["MatchDate"].to_numpy()
+
+    try:
+        calibration_result = calibrate.evaluate(
+            all_predictions, priceable["Result"].to_numpy(), config)
+        print(calibrate.calibration_report(calibration_result))
+
+        print()
+        print("  Platt vs isotonic, both judged out of sample:")
+        comparison = calibrate.compare_methods(
+            all_predictions, priceable["Result"].to_numpy(), config)
+        print("    " + comparison.to_string(
+            index=False, float_format=lambda v: f"{v:.4f}"
+        ).replace("\n", "\n    "))
+
+        if not args.no_save:
+            cal_path = calibrate.save_calibration(
+                calibration_result["calibration"], config)
+            print(f"\n  calibration map written to: {cal_path}")
+    except calibrate.CalibrationError as error:
+        # Expected on the bundled sample: too few matches to fit a map on one
+        # half and judge it on the other. The run continues.
+        print("  CANNOT CALIBRATE — and that is the right outcome here:")
+        print(f"    {error}")
+    print()
+
     # --- Downstream stages (progressively implemented) ---
     print("Downstream stages:")
-    _run_stage("Stage 4 — Calibration", calibrate.calibrate, None, None, config)
     _run_stage("Stage 5 — Staking", staking.stake, None, None, config)
     _run_stage("Stage 6 — Backtest", backtest.walk_forward, df, config)
     _run_stage("Stage 6 — CLV", clv.compute_clv, None, None)

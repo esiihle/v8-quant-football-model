@@ -291,17 +291,114 @@ league-average parameters rather than rejected — a promoted side must be
 priceable on debut — and flagged `KnownTeams = False`, so Phase 5 can decline to
 stake on a fixture the model does not really know.
 
-## 4. Calibration
-**Status: 🟡 skeleton — built in Phase 4.**
+## 4. Calibration  *(built 13 Oct 2026)*
 
-Raw model probabilities are mapped to calibrated ones via isotonic regression or
-Platt scaling, and assessed with proper scoring rules:
+A calibrated probability means what it says: of all the matches where the model
+said 60%, about 60% should happen.
 
-$$\text{Brier} = \frac{1}{N}\sum (p_i - o_i)^2, \qquad
-  \text{LogLoss} = -\frac{1}{N}\sum \big[o_i \log p_i + (1 - o_i)\log(1 - p_i)\big]$$
+### 4.1 Why this phase exists
 
-plus reliability diagrams (predicted vs. realised frequency). Method choice
-justified out-of-sample in Phase 4.
+Phase 5 stakes money by comparing the model's probability with the market's. A
+probability that is five points too high across a whole band of matches does not
+look wrong — **it looks like edge**. The staking rule will bet it, every time,
+and lose. Calibration is what earns the right to treat the model's output as a
+probability, and therefore the right to compare it to a price.
+
+### 4.2 The discipline that makes it meaningful
+
+A calibration map fitted on the same predictions it is then scored on will always
+look like an improvement, because it has seen the answers. So the map is fitted
+on the chronologically **earlier** share of matches (`calibration.fit_fraction`)
+and judged on the **later** ones.
+
+Not a random split. Calibration is applied forward in time, so it has to be
+tested forward in time. `test_in_sample_calibration_flatters_itself`
+demonstrates the difference rather than asserting it: fitting and scoring on the
+same matches shows a larger gain than the honest split does, every time.
+
+### 4.3 Proper scoring rules
+
+Both are reported, because they punish differently and the difference is
+informative.
+
+$$\text{Brier} = \frac{1}{N}\sum_i\sum_k (p_{ik} - o_{ik})^2
+\qquad
+\text{LogLoss} = -\frac{1}{N}\sum_i \ln p_{i,\text{actual}}$$
+
+A rule is **proper** when the only way to minimise it is to report your true
+beliefs — an improper rule can be gamed by shading predictions toward the
+extremes.
+
+* **Brier** is bounded and forgiving: being wrong at 99% costs a little under
+  twice being wrong at 70%.
+* **Log-loss** is unbounded: a 1% probability on something that happens costs
+  about 4.6, where Brier charges under 1.
+
+A model that looks fine on Brier and poor on log-loss is making occasional
+catastrophic calls, and for a Kelly-staked system that is the whole game — one
+confident wrong bet at full stake can end a bankroll.
+
+Every score is reported against a **base-rates-only** predictor. Beating that is
+the minimum bar for claiming the model knows anything, and it is easier to fail
+than people expect.
+
+### 4.4 The two methods, and letting the data choose
+
+* **Platt scaling** — a one-dimensional logistic regression on the model's
+  log-odds. Two parameters: a slope (below 1 corrects overconfidence) and an
+  intercept (a level shift). It can only stretch or shift the existing ordering,
+  so it cannot overfit much.
+* **Isotonic regression** — any non-decreasing step function. Far more flexible,
+  so it can fix shapes Platt cannot, and on a small sample it will happily fit
+  noise.
+
+`compare_methods` scores both out of sample. On one or two seasons the first real
+run came out exactly as the theory predicts:
+
+| method | log-loss improvement (out of sample) |
+|---|---|
+| Platt | **+0.0018** |
+| isotonic | **−0.0129** |
+
+Isotonic made the model *worse*. With ~336 matches in the fitting window, split
+three ways across outcomes, its extra freedom fits noise. That is the argument
+for Platt on this dataset, measured rather than asserted.
+
+### 4.5 Three outcomes, not two
+
+Calibration is a binary technique; football has three outcomes. Each of home /
+draw / away is calibrated separately and the three are renormalised to sum to 1.
+
+That renormalisation is a genuine approximation, so `renormalisation_cost`
+measures it: how far the three calibrated probabilities were from summing to 1
+before being forced to. A mean total near 1.00 is unremarkable; a large
+deviation would mean the per-outcome maps disagree with each other and the
+approach needs rethinking rather than patching. The two-sided markets
+(over/under, BTTS) need no such approximation.
+
+### 4.6 Expected calibration error
+
+$$\text{ECE} = \sum_b \frac{n_b}{N}\,\big|\bar p_b - \bar o_b\big|$$
+
+The average gap between what the model said and what happened, weighted by band
+population. It is a **diagnostic, not a scoring rule**: a model that always
+predicts the base rate has near-zero ECE and is useless. It is always read beside
+Brier or log-loss, never alone.
+
+The reliability table is always printed with its **counts**, because a gap has to
+be judged against sampling noise. A band of 200 matches at a realised rate near
+0.5 carries a standard error of 0.035, so a gap of 0.06 there is ordinary while
+the same gap in a 2,000-match band would be real. The test checks each band
+against three standard errors of its own count rather than a flat tolerance.
+
+### 4.7 What a small improvement means
+
+On data simulated *from* the Dixon-Coles model the calibration gain is tiny, and
+it should be: the model is already almost correct, so there is nothing
+systematic to remove. On real matches the model is misspecified — real football
+is not exactly bivariate Poisson — and the gain should be larger. If it is not,
+that is a finding worth reporting rather than tuning away, and the run report
+says so in those terms.
 
 ## 5. Staking
 **Status: 🟡 skeleton — built in Phase 5.**

@@ -95,6 +95,23 @@ model:
   max_iterations: 500
   model_filename: dixon_coles.json
 
+# --- Phase 4: probability calibration -----------------------------------------
+calibration:
+  # "platt" (two parameters: slope and intercept) or "isotonic" (any
+  # non-decreasing step function). Platt is the safer choice on a few hundred
+  # matches because it cannot fit much noise; isotonic can correct shapes Platt
+  # cannot but will overfit a small sample. compare_methods() scores both out of
+  # sample rather than taking this on trust.
+  method: platt
+
+  # Share of matches (chronologically EARLIEST) used to fit the calibration map.
+  # The rest are held back to judge it. A random split would let the map learn
+  # from matches that had not happened yet.
+  fit_fraction: 0.5
+
+  reliability_bins: 10
+  calibration_filename: calibration.json
+
 # Staking settings (used from Phase 5).
 staking:
   kelly_fraction: 0.25             # fractional Kelly (quarter) to blunt variance

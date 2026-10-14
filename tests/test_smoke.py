@@ -64,12 +64,13 @@ def test_missing_required_column_fails_loudly():
 def test_downstream_stages_declared_but_pending():
     """Every stage NOT YET BUILT exists and cleanly signals 'not built yet'.
 
-    Stages drop off this list as they are implemented: features left it in
-    Phase 2 (9 Oct 2026) and Dixon-Coles in Phase 3 (10 Oct 2026); both now
-    have their own test modules.
+    Stages drop off this list as they are implemented: features in Phase 2
+    (9 Oct), Dixon-Coles in Phase 3 (10 Oct) and calibration in Phase 4
+    (13 Oct); each now has its own test module. metrics is partially built —
+    the proper scoring rules landed with Phase 4, the betting metrics come in
+    Phase 6, so `metrics.summarise` is still on this list.
     """
     for call in (
-        lambda: calibrate.calibrate(None, None),
         lambda: staking.stake(None, None),
         lambda: backtest.walk_forward(None),
         lambda: clv.compute_clv(None, None),
