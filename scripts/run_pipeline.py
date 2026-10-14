@@ -188,16 +188,40 @@ def main():
             cal_path = calibrate.save_calibration(
                 calibration_result["calibration"], config)
             print(f"\n  calibration map written to: {cal_path}")
+        # Hand the calibrated, out-of-sample predictions to staking, with the
+        # odds attached. Only the evaluation period is staked: the fitting period
+        # taught the calibration map, so betting it would be betting on hindsight.
+        staking_input = calibration_result["calibrated_predictions"].copy()
+        for column in ("OddsH", "OddsD", "OddsA", "Result"):
+            staking_input[column] = priceable.set_index("MatchID").loc[
+                staking_input["MatchID"], column].to_numpy()
+
     except calibrate.CalibrationError as error:
         # Expected on the bundled sample: too few matches to fit a map on one
         # half and judge it on the other. The run continues.
         print("  CANNOT CALIBRATE — and that is the right outcome here:")
         print(f"    {error}")
+        staking_input = None
+    print()
+
+    # --- Phase 5: staking ----------------------------------------------------
+    print("Stage 5 — Staking (fractional Kelly)")
+    if staking_input is None:
+        print("  SKIPPED — no calibrated probabilities to stake.")
+    else:
+        bets = staking.find_value_bets(staking_input, config)
+        ledger, summary = staking.simulate_bankroll(bets, config)
+        print(staking.staking_report(bets, ledger, summary, config))
+
+        if not args.no_save and len(ledger):
+            out_dir = REPO_ROOT / config["data"]["processed_dir"]
+            out_dir.mkdir(parents=True, exist_ok=True)
+            ledger.to_csv(out_dir / "bet_ledger.csv", index=False)
+            print(f"\n  bet ledger written to: {out_dir / 'bet_ledger.csv'}")
     print()
 
     # --- Downstream stages (progressively implemented) ---
     print("Downstream stages:")
-    _run_stage("Stage 5 — Staking", staking.stake, None, None, config)
     _run_stage("Stage 6 — Backtest", backtest.walk_forward, df, config)
     _run_stage("Stage 6 — CLV", clv.compute_clv, None, None)
     _run_stage("Stage 6 — Metrics", metrics.summarise, None)

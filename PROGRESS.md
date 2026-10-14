@@ -4,7 +4,7 @@
 > session. This is the fastest way to resume: read this file (plus `docs/ROADMAP.md`)
 > and you know exactly where the project stands. Newest entry at the top.
 
-**Current phase:** Phase 4 — Calibration (Nov 16 – Nov 22), started early
+**Current phase:** Phase 5 — Staking (Nov 23 – Nov 29), started early
 **Overall status:** 🟢 Pipeline runs end-to-end on **real** EPL data; tests green (6);
 exploration notebook written and run.
 **Next action:** Run the exploration notebook and fill in its findings table
@@ -39,7 +39,7 @@ what the notebook shows.
 pip install -r requirements.txt
 python scripts/run_pipeline.py     # real data from data/raw if present, else the sample
 python scripts/run_pipeline.py --sample   # force the bundled sample
-pytest                             # 87 tests (smoke + Phases 1-4), all green
+pytest                             # 117 tests (smoke + Phases 1-5), all green
 python scripts/run_pipeline.py --no-save  # run the checks without writing output
 # notebooks/01_exploration.ipynb   # open in VS Code, Run All
 ```
@@ -47,6 +47,60 @@ python scripts/run_pipeline.py --no-save  # run the checks without writing outpu
 ---
 
 ## Session log
+
+### 2026-10-14 — Phase 5: value detection, fractional Kelly, bankroll simulation
+- `src/staking.py` built: `overround`, `devig_proportional`, `devig_shin`,
+  `market_probabilities`, `kelly_fraction`, `expected_log_growth`, `stake_size`,
+  `find_value_bets`, `simulate_bankroll`, `staking_report`.
+
+#### A conceptual error this module shipped with, and the fix
+The first version tested value against the **de-vigged** market probability.
+That is the permissive direction and it is wrong: the payout is at the actual
+odds, so expected value is positive if and only if `p > 1/o`. At odds of 3.50 in
+a 4.9% book, a model saying 0.278 beats de-vigged fair value (0.272) and has
+EV of **-2.7%**. The corrected module measures:
+  - `edge` against the **raw price** — decides bets, and agrees with Kelly's own
+    sign by construction (`test_edge_and_kelly_agree_on_when_to_bet`);
+  - `disagreement` against de-vigged fair value — a diagnostic, and the basis of
+    Phase 6's CLV. It never triggers a bet.
+`test_a_bet_beating_fair_but_not_raw_is_not_value` pins it.
+
+#### The "2x Kelly" claim, corrected
+Written first as an exact identity ("2x Kelly gives zero growth"). It is not —
+that is the small-edge / Gaussian limit. Measured for discrete bets the
+zero-growth point runs 1.947x (p=0.6, odds 2.0) to 2.098x (p=0.25, odds 5.0),
+converging on exactly 2.000x as the edge shrinks (p=0.505). The practical
+conclusion is unchanged and is the real argument for fractional Kelly: a model
+20% too optimistic is already staking about double what it should.
+
+- **De-vig decision settled** (open since Phase 1 methodology §1): **Shin**, not
+  proportional. Bookmakers load margin onto longshots, so proportional
+  de-vigging overstates longshot probabilities; Shin corrects it. Matters for
+  CLV rather than bet selection, but a biased fair-value estimate would bias the
+  headline metric.
+- Risk caps imposed on top of Kelly and labelled as risk management, not theory:
+  5% per bet, 15% total exposure per day (crowded days scaled proportionally).
+- Same-day bets sized against the same bankroll — at the moment Saturday's bets
+  are placed, Saturday's results do not exist.
+- ROI (on bankroll) and yield (on turnover) both reported, because they answer
+  different questions and are routinely conflated.
+- `tests/test_staking.py` (new): 30 tests — Kelly by hand, zero at fair odds,
+  negative without edge, **Kelly verified as the numerical maximiser of expected
+  log growth**, the zero-growth point measured, quarter-Kelly outperforming full
+  Kelly under an over-optimistic p, overround, both de-vig methods summing to 1,
+  **Shin shading longshots down**, clean fallback on a no-margin book, a
+  fair-matching model finding no value, the fair-but-not-raw case, edge/Kelly
+  agreement, caps binding, same-day sizing, reproducibility, fractional Kelly
+  reducing drawdown, ROI != yield. Suite now 117 green.
+- `config.yaml`: `staking` block expanded — `devig_method`,
+  `max_stake_fraction`, `max_daily_exposure`, with the reasoning for
+  `kelly_fraction: 0.25` written in the file.
+- `scripts/run_pipeline.py`: Stage 5 stakes only the calibration **evaluation**
+  period (the fitting period taught the map, so betting it would be hindsight)
+  and writes `data/processed/bet_ledger.csv`.
+- **Still outstanding:** `notebooks/01_exploration.ipynb` has not been run.
+- **Next:** Phase 6 — walk-forward backtest and CLV, the headline metric. The
+  staking numbers are not a result until that exists.
 
 ### 2026-10-13 — Phase 4: probability calibration
 - `src/metrics.py` **partially built**: the proper scoring rules land now

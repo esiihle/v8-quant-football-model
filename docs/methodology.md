@@ -400,26 +400,127 @@ is not exactly bivariate Poisson — and the gain should be larger. If it is not
 that is a finding worth reporting rather than tuning away, and the run report
 says so in those terms.
 
-## 5. Staking
-**Status: 🟡 skeleton — built in Phase 5.**
+## 5. Staking  *(built 14 Oct 2026)*
 
-### 5.1 Value definition
-A bet is flagged as value when model probability exceeds market-implied
-probability by a margin threshold (set to control false positives).
+### 5.1 Two market probabilities, two different jobs
 
-### 5.2 Kelly criterion
-For a single bet at decimal odds $o$ (net odds $b = o - 1$), win probability $p$,
-$q = 1 - p$, the growth-optimal fraction is:
+Bookmaker odds do not sum to 100%. That leaves two market probabilities per
+outcome, and conflating them is the subtlest error in this pipeline:
 
-$$f^{\*} = \frac{bp - q}{b}$$
+| | Meaning | Used for |
+|---|---|---|
+| **Raw implied**, $1/o$ | what the price pays | **the value test** — EV is positive iff $p > 1/o$ |
+| **De-vigged ("fair")** | the market's honest estimate | a diagnostic, and the basis of CLV in §6 |
 
-We stake **fractional Kelly** ($c \cdot f^{\*}$, e.g. $c = 0.25$) to blunt the cost
-of estimation error and reduce variance. Multi-outcome generalisation documented
-in Phase 5.
+A bet can beat the de-vigged probability and still lose money, because the payout
+is at the actual odds. At odds of 3.50 in a 4.9% book: raw implied 0.2857,
+de-vigged fair 0.272. A model saying **0.278** disagrees with the market in the
+right direction and has expected value of **−2.7%**.
 
-### 5.3 Bankroll simulation
-The staking plan is simulated over the bet history to expose realistic drawdowns
-and variance, not just terminal return.
+So the value test is measured against the **raw price**, which is also exactly
+where Kelly turns positive — the two agree by construction, and
+`test_edge_and_kelly_agree_on_when_to_bet` asserts they never diverge. The
+de-vigged probability is reported separately as `disagreement`, and never
+triggers a bet.
+
+**This module shipped with that backwards.** The first version tested value
+against the de-vigged probability — the permissive direction — and would have
+flagged negative-EV bets as value, every time the model agreed slightly more with
+fair value than the price allowed.
+`test_a_bet_beating_fair_but_not_raw_is_not_value` pins the corrected behaviour.
+
+### 5.2 De-vigging: proportional vs Shin *(the open decision from §1, now settled)*
+
+**Proportional** scales implied probabilities to sum to 1 and assumes the margin
+is spread evenly. Bookmakers do not spread it evenly — they load more onto
+longshots, because that is where recreational money goes. So proportional
+de-vigging **overstates longshot probabilities**.
+
+**Shin (1993)** models the book as containing a proportion $z$ of insider money
+and unwinds the margin accordingly:
+
+$$p_i = \frac{\sqrt{z^2 + 4(1-z)\,\pi_i^2/\Pi} - z}{2(1-z)},
+\qquad \pi_i = 1/o_i,\ \Pi = \sum_j \pi_j$$
+
+with $z$ solved numerically so the probabilities sum to 1. On a 5.7% book priced
+1.45 / 4.2 / 8.0, Shin shades the longshot **down** and the favourite **up**
+relative to proportional.
+
+**Shin is the default.** It matters for CLV in §6 rather than for bet selection
+(§5.1), but a biased estimate of fair value would bias the headline metric.
+Falls back to proportional, with the reason recorded, when the book has no margin
+to unwind.
+
+### 5.3 The Kelly criterion, and the assumption underneath it
+
+$$f^{*} = \frac{bp - q}{b} = \frac{po - 1}{o - 1}$$
+
+the fraction maximising expected *logarithmic* growth — verified numerically in
+`test_kelly_maximises_expected_log_growth` rather than asserted.
+
+**Kelly assumes $p$ is known exactly.** It is not: $p$ is a fitted model's output
+and carries estimation error. The penalty for overestimating it is sharply
+asymmetric:
+
+$$E[\ln] = p\ln(1 + f(o-1)) + (1-p)\ln(1-f)$$
+
+* at $f^{*}$, growth is maximised;
+* at roughly $2f^{*}$, growth is **zero** — all the edge converted to variance;
+* beyond that, the bet loses money *with a real edge in hand*.
+
+**The "2x" figure deserves precision, because it is usually quoted as an identity
+and is not one.** It is exact only in the small-edge (Gaussian /
+continuous-rebalancing) limit, where growth is $f\mu - f^2\sigma^2/2$ and
+vanishes at $f = 2\mu/\sigma^2$. For discrete bets the zero-growth point is
+*near* 2x and depends on the odds. Measured in the test suite:
+
+| p | odds | zero growth at |
+|---|---|---|
+| 0.600 | 2.0 | 1.947× Kelly |
+| 0.550 | 2.2 | 1.975× |
+| 0.400 | 3.0 | 2.039× |
+| 0.250 | 5.0 | 2.098× |
+| 0.505 | 2.0 | **2.000×** (tiny edge: the limit) |
+
+The practical conclusion is unchanged. A model whose probabilities are 20% too
+optimistic is already staking roughly double what it should at "full Kelly" —
+sitting on the zero-growth boundary with a genuine advantage. **That, not variance
+reduction, is the argument for fractional Kelly.**
+`staking.kelly_fraction` defaults to 0.25, which survives being wrong about $p$
+by a factor of four before reaching that boundary.
+
+### 5.4 Risk limits that are not part of Kelly
+
+Kelly sizes each bet as though it were the only one. Two caps are imposed on top,
+and they are explicitly *risk management*, not theory:
+
+* `max_stake_fraction` (5%) — no single bet can matter more than this, because a
+  single model probability can be badly wrong;
+* `max_daily_exposure` (15%) — ten simultaneous bets on one afternoon are not
+  independent enough for Kelly's arithmetic to be safe. A crowded day is scaled
+  down proportionally, preserving relative sizing.
+
+### 5.5 Bankroll simulation
+
+Two details decide whether the simulation means anything:
+
+**Bets on the same date are sized against the same bankroll.** When Saturday's
+bets are placed, Saturday's results are unknown, so sizing the third bet off the
+first two's winnings uses information that did not exist.
+`test_same_day_bets_are_sized_off_the_same_bankroll` enforces it.
+
+**ROI and yield are different numbers** and are routinely confused: ROI is on the
+bankroll, yield is on money staked. A plan can show a large ROI with a thin yield
+by churning volume, and the risk profiles are nothing alike. Both are reported,
+alongside **maximum drawdown** as a share of the running peak — which is how a
+bankroll fall is actually experienced.
+
+### 5.6 What these numbers are not
+
+The staking run uses a model fitted on **all** the data. It is a sanity check
+that the plumbing works and the caps bind, not a result. §6's walk-forward
+backtest produces the honest version, and the run report says so every time it
+prints.
 
 ## 6. Backtesting & evaluation
 **Status: 🟡 skeleton — built in Phase 6.**

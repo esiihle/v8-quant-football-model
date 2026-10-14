@@ -112,11 +112,32 @@ calibration:
   reliability_bins: 10
   calibration_filename: calibration.json
 
-# Staking settings (used from Phase 5).
+# --- Phase 5: staking ---------------------------------------------------------
 staking:
-  kelly_fraction: 0.25             # fractional Kelly (quarter) to blunt variance
+  # Fraction of full Kelly to stake. The reason this is not 1.0 is NOT variance:
+  # at twice the optimal stake, expected log growth is exactly zero, and beyond
+  # it you lose money even with a real edge. Quarter-Kelly survives being wrong
+  # about the model's probability by a factor of four before hitting that
+  # boundary. See methodology section 5.2.
+  kelly_fraction: 0.25
+
   starting_bankroll: 1000
-  min_edge: 0.02                   # only bet when model prob beats implied by 2%+
+
+  # Model probability must beat the DE-VIGGED market probability by this much.
+  # Comparing against raw 1/odds instead would turn the bookmaker's margin into
+  # phantom edge on every bet.
+  min_edge: 0.02
+
+  # How the bookmaker's margin is removed. "shin" corrects the
+  # favourite-longshot bias (bookmakers load more margin onto longshots);
+  # "proportional" assumes the margin is spread evenly and therefore overstates
+  # longshot probabilities. Shin is the default for that reason.
+  devig_method: shin
+
+  # Risk limits, not part of Kelly. A single model probability can be badly
+  # wrong, so no one bet and no one day should be able to matter this much.
+  max_stake_fraction: 0.05      # per bet, as a share of bankroll
+  max_daily_exposure: 0.15      # total across all bets on one date
 
 logging:
   level: INFO
