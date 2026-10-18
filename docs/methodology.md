@@ -522,26 +522,137 @@ that the plumbing works and the caps bind, not a result. §6's walk-forward
 backtest produces the honest version, and the run report says so every time it
 prints.
 
-## 6. Backtesting & evaluation
-**Status: 🟡 skeleton — built in Phase 6.**
+## 6. Backtesting & evaluation  *(built 18 Oct 2026)*
+
+**The honesty layer.** Everything before this phase produced numbers that were,
+in one way or another, fitted on data they were then measured against. This is
+what turns them into a forecast.
 
 ### 6.1 Walk-forward protocol
-At each match, the model is fitted only on data available *before* $t_m$, on a
-rolling/expanding window. Refit cadence documented in Phase 6.
 
-### 6.2 Lookahead guards
-Explicit assertions that no feature or decision uses information dated at or after
-the match. This is the integrity backbone of the whole project.
+Step forward through time in refit windows. At each step:
 
-### 6.3 Closing-line value (CLV) — the headline
-CLV compares the odds taken against the closing odds. Consistent positive CLV is
-the strongest available evidence of a real, repeatable edge, precisely because the
-closing line is the market's most efficient estimate. Exact CLV metric (e.g.
-mean beat vs. closing implied probability) fixed in Phase 6.
+1. fit the Dixon-Coles model on matches **strictly before** the window opens;
+2. fit the calibration map on matches strictly before the window opens;
+3. price the matches inside the window with that frozen model;
+4. stake at the odds that were **available**, never the close;
+5. record the odds taken and the closing odds, for CLV.
 
-### 6.4 Supporting metrics
-ROI, yield, hit rate by confidence band, a Sharpe-like ratio, and maximum
-drawdown — all reported with confidence intervals, never as bare point estimates.
+Then move the window and refit. Nothing inside a window ever influences the model
+that priced it. The window is expanding, so each refit sees everything the last
+one did plus what has since been played
+(`test_every_window_has_more_training_data_than_the_last`).
+
+**Why a cadence rather than refitting every match.** Refitting before every
+single match is the purest version and is also what a real bettor could not do —
+the model would change between two matches kicking off together.
+`backtest.refit_every_n_days` is both honest and realistic: it is what someone
+running this weekly would actually have. The cost is a model up to one window
+stale when it prices the last match in that window, which is a **conservative**
+error, not a flattering one.
+
+### 6.2 The lookahead guard
+
+`assert_no_lookahead` runs on **every window of every run** and raises rather than
+warns. It is not a test-only helper: a leak that only appears on real data at a
+particular season boundary would never be caught by a unit test with synthetic
+fixtures.
+
+The boundary is **strict**. A match on the same date as the window's first match
+is excluded from training, because two matches kicking off the same afternoon
+cannot inform each other — at the moment the bets are placed, neither has
+happened. `test_guard_treats_the_same_day_as_a_leak` pins it.
+
+Three leaks this phase prevents, in increasing order of subtlety:
+
+| Leak | Where it hides |
+|---|---|
+| **Model** | fitting on matches after the bet — guarded per window |
+| **Calibration** | a map fitted on all the data has seen the outcomes it is calibrating; the effect is invisible, probabilities simply look better than they were |
+| **Odds** | staking at the closing price, which did not exist when the decision was made — `test_bets_are_struck_at_the_available_odds_not_the_close` checks every recorded price against the source opening price |
+
+### 6.3 Closing-line value — the headline metric
+
+CLV compares the odds taken against the **closing** odds, the last price before
+kick-off, after every injury report and team sheet has been absorbed. The closing
+line is the market's most efficient estimate, and that is exactly why beating it
+means something.
+
+**Why CLV rather than ROI.** ROI is what you earn, so it is the number that
+matters — and it is almost useless for deciding whether a model *works*, because
+its variance is enormous. A 3% edge into 3.0 odds has a per-bet standard
+deviation around 1.4 units; establishing it takes **thousands** of bets. CLV does
+not depend on results at all: every bet measures whether the price moved your
+way, not whether the ball went in. Removing the largest source of noise means a
+few hundred bets say more about edge than a few thousand bets of ROI do.
+
+Three expressions, all reported:
+
+| Expression | Definition | What it is for |
+|---|---|---|
+| **Odds ratio** | $O_t/O_c - 1$ | intuitive, the usual quote |
+| **Probability points** | de-vigged closing prob − taken implied prob | **authoritative** for averaging |
+| **Beat rate** | share of bets where the price moved your way | robust, needs no averaging |
+
+**Probability points is authoritative, and the first real run showed why.** The
+odds ratio is asymmetric: a price halving scores −50% while a doubling scores
++100%, so its mean is pulled upward by its own right tail. The walk-forward
+produced:
+
+```
+mean CLV (odds ratio)          +1.82%   [+0.81%, +3.00%]   positive
+mean CLV (probability points)  -0.67%   [-0.87%, -0.47%]   NEGATIVE
+beat the close                 47.46%   [42.62%, 52.30%]
+CLV distribution: worst -23.17% | median -0.33% | best +108.37%
+```
+
+Both intervals excluded zero, in **opposite directions**. The ratio was being
+carried by a single +108% price collapse while the model was in fact losing to
+the close, and the beat rate agreed with probability points. The report now
+flags disagreement explicitly and never lets the flattering measure stand as the
+verdict — `test_disagreeing_clv_measures_are_flagged_not_papered_over`.
+
+**CLV by claimed edge** is the sharpest diagnostic available. If the model has
+real information, the bets where it claimed the *most* edge should show the
+*most* CLV. A flat profile means the edge estimate carries no signal even when
+the average is positive: the model is right on average and cannot tell you
+where.
+
+### 6.4 Supporting metrics, all with intervals
+
+**Nothing in this project reports a betting metric without a bootstrap
+confidence interval.** A yield of +3% over 200 bets and +3% over 20,000 bets are
+entirely different claims, and a bare point estimate hides which one you have.
+Percentile bootstrap rather than a normal approximation, because bet-level
+returns are violently skewed — most bets lose a unit, a few win several.
+
+* **Yield** (per unit staked) and **ROI** (on bankroll) — different questions,
+  routinely confused.
+* **Maximum drawdown**, against the running peak, which is how a fall is
+  experienced.
+* **Sharpe-like ratio**, named that on purpose: no risk-free rate is subtracted,
+  and it assumes near-normal returns which bet returns are not. It therefore
+  understates tail risk — the risk that actually ends bankrolls — and is read
+  beside the drawdown, which makes no such assumption.
+* **Performance by claimed edge**, the same diagnostic as for CLV.
+
+### 6.5 What the first honest run said
+
+Worth recording, because the contrast with the in-sample numbers is the whole
+point of the phase:
+
+| | Phase 5 (model fitted on everything) | Phase 6 (walk-forward) |
+|---|---|---|
+| ROI | +311% | **−28.5%** |
+| yield | +22.9% | **−4.2%** [−17.9%, +10.6%] |
+
+The in-sample figure was an artefact of a model that had seen the matches it was
+betting on. The walk-forward figure is the forecast — and its interval includes
+zero, so even the loss is not statistically established on 413 bets. That is
+precisely the situation CLV exists for, and CLV says the model is not beating the
+close.
+
+Reporting this rather than tuning until it looks better is the deliverable.
 
 ## References
 - Dixon, M. J. & Coles, S. G. (1997). *Modelling Association Football Scores and

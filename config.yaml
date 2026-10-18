@@ -139,5 +139,31 @@ staking:
   max_stake_fraction: 0.05      # per bet, as a share of bankroll
   max_daily_exposure: 0.15      # total across all bets on one date
 
+# --- Phase 6: walk-forward backtest -------------------------------------------
+backtest:
+  # Matches that must exist before the first bet is eligible. Too low and the
+  # early fits are built on almost nothing; too high and there is little history
+  # left to test on.
+  min_training_matches: 200
+
+  # How often the model and calibration map are refitted. Refitting before every
+  # match is the purest version and also what a real bettor could not do — the
+  # model would change between two matches kicking off together. A cadence is
+  # honest AND realistic: it is what someone running this weekly would have. The
+  # cost is a model up to one window stale, which is a conservative error.
+  refit_every_n_days: 14
+
+  # Calibrate inside the walk-forward, on training history only. The subtle leak
+  # this prevents: a map fitted on all the data has seen the outcomes of the
+  # matches it is calibrating, and the effect is invisible in the output.
+  calibrate: true
+  min_calibration_matches: 150
+
+  # Nothing in this project reports a betting metric without a confidence
+  # interval. A yield of +3% over 200 bets and over 20,000 bets are entirely
+  # different claims.
+  bootstrap_resamples: 2000
+  confidence_level: 0.95
+
 logging:
   level: INFO

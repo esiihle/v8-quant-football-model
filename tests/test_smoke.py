@@ -61,26 +61,33 @@ def test_missing_required_column_fails_loudly():
         bad_path.unlink(missing_ok=True)
 
 
-def test_downstream_stages_declared_but_pending():
-    """Every stage NOT YET BUILT exists and cleanly signals 'not built yet'.
+def test_every_pipeline_stage_is_now_built():
+    """Phase 0 kept a list of stages that still raised NotImplementedError.
 
-    Stages drop off this list as they are implemented: features in Phase 2
-    (9 Oct), Dixon-Coles in Phase 3 (10 Oct) calibration in Phase 4
-    (13 Oct) and staking in Phase 5 (14 Oct); each now has its own test module. metrics is partially built —
-    the proper scoring rules landed with Phase 4, the betting metrics come in
-    Phase 6, so `metrics.summarise` is still on this list.
+    As of Phase 6 (18 Oct 2026) that list is empty: ingest, features,
+    dixon_coles, calibrate, staking, backtest, clv and metrics are all
+    implemented and each has its own test module. This test replaces the old
+    "declared but pending" check, so the suite records that the scaffold is
+    fully filled in rather than silently dropping the idea.
     """
-    for call in (
-        lambda: backtest.walk_forward(None),
-        lambda: clv.compute_clv(None, None),
-        lambda: metrics.summarise(None),
-    ):
-        with pytest.raises(NotImplementedError):
-            call()
+    import inspect
 
+    stages = {
+        "ingest": ingest.run_ingest,
+        "features": features.build_features,
+        "dixon_coles": dixon_coles.fit,
+        "calibrate": calibrate.evaluate,
+        "staking": staking.find_value_bets,
+        "backtest": backtest.walk_forward,
+        "clv": clv.clv_summary,
+        "metrics": metrics.summarise,
+    }
 
-# --- Added 30 Sep 2026: real-data discovery -------------------------------
-
+    for name, function in stages.items():
+        source = inspect.getsource(function)
+        assert "NotImplementedError" not in source, (
+            f"{name} still raises NotImplementedError"
+        )
 
 def test_expected_raw_files_are_named_and_linked_correctly():
     """Every configured league-season maps to a filename and a download URL."""

@@ -4,7 +4,7 @@
 > session. This is the fastest way to resume: read this file (plus `docs/ROADMAP.md`)
 > and you know exactly where the project stands. Newest entry at the top.
 
-**Current phase:** Phase 5 — Staking (Nov 23 – Nov 29), started early
+**Current phase:** Phase 6 — Backtest & CLV (Nov 30 – Dec 6), started early
 **Overall status:** 🟢 Pipeline runs end-to-end on **real** EPL data; tests green (6);
 exploration notebook written and run.
 **Next action:** Run the exploration notebook and fill in its findings table
@@ -39,7 +39,7 @@ what the notebook shows.
 pip install -r requirements.txt
 python scripts/run_pipeline.py     # real data from data/raw if present, else the sample
 python scripts/run_pipeline.py --sample   # force the bundled sample
-pytest                             # 117 tests (smoke + Phases 1-5), all green
+pytest                             # 147 tests (smoke + Phases 1-6), all green
 python scripts/run_pipeline.py --no-save  # run the checks without writing output
 # notebooks/01_exploration.ipynb   # open in VS Code, Run All
 ```
@@ -47,6 +47,74 @@ python scripts/run_pipeline.py --no-save  # run the checks without writing outpu
 ---
 
 ## Session log
+
+### 2026-10-18 — Phase 6: walk-forward backtest, CLV and headline metrics
+- `src/backtest.py` built: `assert_no_lookahead`, `walk_forward`,
+  `backtest_report`. `src/clv.py` built: `clv_per_bet`, `bootstrap_interval`,
+  `clv_summary`, `clv_by_band`, `clv_report`. `src/metrics.py` **completed**:
+  `bootstrap_ci`, `max_drawdown`, `sharpe_like`, `performance_by_band`,
+  `summarise`, `metrics_report`.
+- **Every pipeline stage is now implemented.** The Phase 0 "declared but
+  pending" smoke test is replaced by one asserting no stage still raises
+  `NotImplementedError`.
+- The lookahead guard runs on **every window of every run**, not just in tests,
+  and raises rather than warns. Boundary is strict: a match on the same date as
+  the window's first match is excluded, because two matches kicking off together
+  cannot inform each other.
+
+#### The honest numbers, and why they matter
+| | Phase 5 (in-sample) | Phase 6 (walk-forward) |
+|---|---|---|
+| ROI | +311% | **-28.5%** |
+| yield | +22.9% | **-4.2%** [-17.9%, +10.6%] |
+
+The in-sample figure was a model that had seen the matches it was betting on.
+The walk-forward figure is the forecast, and its interval includes zero — so
+even the loss is not established on 413 bets. That is exactly the situation CLV
+exists for.
+
+#### A reporting bug the first run exposed
+The two CLV measures **disagreed and both intervals excluded zero**:
+```
+odds ratio          +1.82%  [+0.81%, +3.00%]   positive
+probability points  -0.67%  [-0.87%, -0.47%]   NEGATIVE
+beat the close      47.46%                      below 50%
+distribution: worst -23.17% | median -0.33% | best +108.37%
+```
+The report said "the confidence interval INCLUDES ZERO", which was false. Cause:
+the odds ratio is asymmetric — a halving scores -50%, a doubling +100% — so its
+mean was carried by one +108% price collapse while the model was losing to the
+close. Probability points is now authoritative, disagreement is flagged
+explicitly, and the flattering measure can never stand as the verdict.
+`test_disagreeing_clv_measures_are_flagged_not_papered_over` pins it.
+
+#### A test-fixture mistake worth recording
+Two CLV tests failed because the fixture fixed the closing draw and away prices
+while letting the home price vary — the closing book summed to between 0.84 and
+1.03, so de-vigging it produced nonsense and the probability-points measure was
+reading the broken fixture. `make_bets_with_closing_market` now builds coherent
+books from probabilities that sum to 1.
+
+- `config.yaml`: `backtest` block — `min_training_matches`,
+  `refit_every_n_days`, `calibrate`, `min_calibration_matches`,
+  `bootstrap_resamples`, `confidence_level`.
+- `tests/test_backtest.py` (new): 30 tests — the guard passing a clean split,
+  **catching a leak**, treating the same day as a leak, empty inputs; the engine
+  running, never pricing without enough history, expanding windows,
+  reproducibility, **bets struck at available odds not the close**; CLV ratio by
+  hand, negative when the price moves against, probability points via the
+  de-vigged close, intervals reported, refusing to claim an edge on noise,
+  banding by claimed edge; bootstrap bracketing and widening with smaller
+  samples, max drawdown by hand, Sharpe NaN without variation, the full
+  pipeline end to end. Suite now 147 green.
+- `scripts/run_pipeline.py`: Stage 6 runs the walk-forward, prints the backtest
+  report, headline metrics with intervals and the CLV report, and writes
+  `walkforward_bets.csv` and `clv_per_bet.csv`. `--verbose` prints one line per
+  window. A `LookaheadError` is never swallowed.
+- **Still outstanding:** `notebooks/01_exploration.ipynb` has not been run.
+- **Next:** Phase 7 — hardening (pinned dependencies, CI, structured logging).
+  Then Phase 8: the README with the real CLV chart and an honest statement of
+  what the model does and does not show.
 
 ### 2026-10-14 — Phase 5: value detection, fractional Kelly, bankroll simulation
 - `src/staking.py` built: `overround`, `devig_proportional`, `devig_shin`,

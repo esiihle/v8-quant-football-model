@@ -65,6 +65,8 @@ def main():
     parser.add_argument("--data", default=None, help="Override the input CSV path")
     parser.add_argument("--sample", action="store_true",
                         help="Force the bundled sample instead of data/raw")
+    parser.add_argument("--verbose", action="store_true",
+                        help="Print one line per walk-forward window")
     parser.add_argument("--no-save", action="store_true",
                         help="Run the checks but don't write the canonical table")
     args = parser.parse_args()
@@ -220,14 +222,63 @@ def main():
             print(f"\n  bet ledger written to: {out_dir / 'bet_ledger.csv'}")
     print()
 
-    # --- Downstream stages (progressively implemented) ---
-    print("Downstream stages:")
-    _run_stage("Stage 6 — Backtest", backtest.walk_forward, df, config)
-    _run_stage("Stage 6 — CLV", clv.compute_clv, None, None)
-    _run_stage("Stage 6 — Metrics", metrics.summarise, None)
+    # --- Phase 6: walk-forward backtest, CLV and headline metrics -----------
+    # THE honest numbers. Everything above used a model fitted on all the data.
+    print("Stage 6 — Walk-forward backtest, CLV and headline metrics")
+    try:
+        walk = backtest.walk_forward(matches, config, progress=args.verbose)
 
-    print("\nPhases 0-2 complete: canonical table and feature matrix built;"
-          " stages 3-6 report status only.")
+        if walk["bets"].empty:
+            print(backtest.backtest_report(walk))
+            print()
+            print("  No bets placed across the whole walk-forward. That is a")
+            print("  legitimate result: a model with no edge over a real market")
+            print("  SHOULD stake nothing.")
+        else:
+            wf_ledger, wf_bankroll = staking.simulate_bankroll(
+                walk["bets"], config)
+            print(backtest.backtest_report(walk, wf_bankroll))
+
+            # Headline metrics, every figure with an interval.
+            print()
+            headline = metrics.summarise(wf_ledger, wf_bankroll, config)
+            band_table = None
+            try:
+                merged = wf_ledger.merge(
+                    walk["bets"][["MatchID", "outcome", "edge"]],
+                    on=["MatchID", "outcome"], how="left")
+                band_table = metrics.performance_by_band(merged, "edge", 4)
+            except (ValueError, KeyError):
+                pass
+            print(metrics.metrics_report(headline, band_table))
+
+            # CLV — the headline claim of the project.
+            print()
+            clv_result = clv.clv_summary(walk["bets"], config)
+            clv_bands = None
+            try:
+                clv_bands = clv.clv_by_band(walk["bets"], "edge", 4, config)
+            except clv.CLVError:
+                pass
+            print(clv.clv_report(clv_result, clv_bands))
+
+            if not args.no_save:
+                out_dir = REPO_ROOT / config["data"]["processed_dir"]
+                out_dir.mkdir(parents=True, exist_ok=True)
+                walk["bets"].to_csv(out_dir / "walkforward_bets.csv", index=False)
+                clv_result["per_bet"].to_csv(out_dir / "clv_per_bet.csv",
+                                             index=False)
+                print(f"\n  walk-forward bets written to: "
+                      f"{out_dir / 'walkforward_bets.csv'}")
+    except backtest.BacktestError as error:
+        print(f"  CANNOT BACKTEST: {error}")
+    except backtest.LookaheadError as error:
+        # Never swallowed. A leak means every number would be fiction.
+        print(f"  LOOKAHEAD DETECTED — run aborted: {error}")
+        raise
+
+    print("\nPhases 0-6 complete: the walk-forward numbers above are the honest"
+          " ones.")
 
 
 if __name__ == "__main__":
