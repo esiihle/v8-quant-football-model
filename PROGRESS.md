@@ -4,9 +4,10 @@
 > session. This is the fastest way to resume: read this file (plus `docs/ROADMAP.md`)
 > and you know exactly where the project stands. Newest entry at the top.
 
-**Current phase:** Phase 6 — Backtest & CLV (Nov 30 – Dec 6), started early
-**Overall status:** 🟢 Pipeline runs end-to-end on **real** EPL data; tests green (6);
-exploration notebook written and run.
+**Current phase:** Phase 7 — Hardening, **complete**. Next: Phase 8 — docs & presentation
+**Overall status:** 🟢 Every stage built; pipeline runs end-to-end on **real** EPL
+data; **164 tests green**; CI runs the suite and a full pipeline run on two
+Python versions; every run prints a reproducibility fingerprint.
 **Next action:** Run the exploration notebook and fill in its findings table
 (carried over from 1 Oct), then review the Phase 1 data-quality report against
 what the notebook shows.
@@ -25,13 +26,13 @@ what the notebook shows.
 ## Phase checklist
 - [x] Documentation (OVERVIEW, README, ROADMAP, methodology, LICENSE, .gitignore)
 - [x] Phase 0 — Foundations & scaffolding
-- [ ] Phase 1 — Data pipeline & validation
-- [ ] Phase 2 — Feature engineering
-- [ ] Phase 3 — Dixon-Coles model
-- [ ] Phase 4 — Probability calibration
-- [ ] Phase 5 — Staking (Kelly)
-- [ ] Phase 6 — Backtest & CLV
-- [ ] Phase 7 — Hardening
+- [x] Phase 1 — Data pipeline & validation
+- [x] Phase 2 — Feature engineering
+- [x] Phase 3 — Dixon-Coles model
+- [x] Phase 4 — Probability calibration
+- [x] Phase 5 — Staking (Kelly)
+- [x] Phase 6 — Backtest & CLV
+- [x] Phase 7 — Hardening
 - [ ] Phase 8 — Docs & presentation
 
 ## How to run (current state)
@@ -39,14 +40,54 @@ what the notebook shows.
 pip install -r requirements.txt
 python scripts/run_pipeline.py     # real data from data/raw if present, else the sample
 python scripts/run_pipeline.py --sample   # force the bundled sample
-pytest                             # 147 tests (smoke + Phases 1-6), all green
+pytest                             # 164 tests (smoke + Phases 1-7), all green
 python scripts/run_pipeline.py --no-save  # run the checks without writing output
+python scripts/run_pipeline.py --log-file run.log   # full diagnostic log to a file
 # notebooks/01_exploration.ipynb   # open in VS Code, Run All
 ```
 
 ---
 
 ## Session log
+
+### 2026-10-20 — Phase 7: hardening, CI and the run fingerprint
+Phases 1–6 built a model. This session makes the claim *"these are the numbers
+this code produces"* checkable by somebody who is not me.
+
+- **`.github/workflows/tests.yml`** — CI on every push and pull request, Python
+  3.11 **and** 3.12 with `fail-fast: false`. Each job installs the pinned
+  requirements, runs `pytest -v --durations=10`, then runs the pipeline
+  end-to-end on the bundled sample. The pipeline run is the part unit tests
+  cannot replace: every test can pass while the stages no longer fit together.
+- **`src/logging_setup.py`** — reports to stdout for a person, diagnostics to
+  stderr (or `--log-file`) for debugging; loggers namespaced `v8.<module>`;
+  `configure()` clears handlers so a second call does not double every line.
+- **`run_fingerprint(config)`** — SHA-256 over the result-affecting config
+  blocks, first 16 characters, printed by every run:
+  `run fingerprint: c6c0bb194dcd9ba2`. Stable across processes, sensitive to
+  `kelly_fraction` 0.25 → 0.20, invariant to key order and comments.
+- **`tests/test_hardening.py`** — 17 tests. Total suite now **164 green**.
+
+#### Why the fingerprint is the real deliverable
+Before it, "it reproduces" was an assertion. Now, if a reported ROI and a rerun
+disagree *while the fingerprints match*, the code is non-deterministic and that
+is a bug. If the fingerprints differ, the settings differed and the comparison
+was never valid. The question became answerable.
+
+#### A bug in a test, which is still a bug
+`test_requirements_cover_everything_the_code_imports` failed with a missing
+dependency called **`average`**. The first version found imports by matching
+`^\s*(from|import)\s+(\w+)` against raw lines, and picked the word up from the
+comment `# Average ranks so tied scores...` in `src/metrics.py`. A regex cannot
+tell code from prose; a parser can. It now walks `ast.Import` / `ast.ImportFrom`
+nodes, which by construction only see real imports. The lesson is in the test's
+docstring, because the next person to reach for a regex over source will be me.
+
+#### Deliberately not hardened, and why
+No network code in the pipeline (a run must not depend on football-data.co.uk
+being up) and no cached fitted models (a cache is a place for stale parameters
+to hide — precisely the bug class Phase 6 exists to catch).
+
 
 ### 2026-10-18 — Phase 6: walk-forward backtest, CLV and headline metrics
 - `src/backtest.py` built: `assert_no_lookahead`, `walk_forward`,

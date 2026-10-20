@@ -1,0 +1,62 @@
+# Continuous integration for the V8 Quant Football Model.
+#
+# What this proves, and why it belongs in a portfolio repo
+# -------------------------------------------------------
+# Every push runs the whole test suite on a FRESH machine with nothing cached —
+# no local data, no leftover virtual environment, no "it works on mine". That is
+# the only way to know a clean clone works, and it is the single most common
+# thing wrong with a project that looks finished.
+#
+# The run deliberately has no access to the real match data (it is git-ignored),
+# so it also proves the suite does not secretly depend on a file sitting on one
+# person's laptop.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Allows a run to be triggered by hand from the Actions tab.
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      # Don't cancel the 3.12 job because 3.11 failed — seeing both results is
+      # the point of testing two versions.
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Show the exact environment
+        # Printed so a failing run can be reproduced locally with the same
+        # versions, rather than guessed at.
+        run: |
+          python --version
+          pip freeze
+
+      - name: Run the test suite
+        run: pytest -v --durations=10
+
+      - name: Check the pipeline runs on the bundled sample
+        # No real data is available here, so this exercises the sample fallback
+        # path end to end — which is exactly what a recruiter cloning the repo
+        # will hit first.
+        run: python scripts/run_pipeline.py --sample --no-save

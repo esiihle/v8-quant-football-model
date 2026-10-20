@@ -32,6 +32,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from src.config import load_config, set_seed
+from src import logging_setup
 from src import (
     ingest,
     features,
@@ -65,6 +66,10 @@ def main():
     parser.add_argument("--data", default=None, help="Override the input CSV path")
     parser.add_argument("--sample", action="store_true",
                         help="Force the bundled sample instead of data/raw")
+    parser.add_argument("--log-file", metavar="PATH",
+                        help="Write a full diagnostic log here")
+    parser.add_argument("--log-level", default=None,
+                        help="DEBUG / INFO / WARNING / ERROR")
     parser.add_argument("--verbose", action="store_true",
                         help="Print one line per walk-forward window")
     parser.add_argument("--no-save", action="store_true",
@@ -74,7 +79,22 @@ def main():
     config = load_config(args.config)
     set_seed(config.get("seed", 42))
 
+    # Logging goes to stderr (and optionally a file); the reports below go to
+    # stdout. Separate on purpose: the reports are for a person to read, the log
+    # is for working out why window 7 produced no bets.
+    logger = logging_setup.configure(
+        level=args.log_level or config.get("logging", {}).get("level", "INFO"),
+        log_file=args.log_file,
+        quiet_console=not args.verbose,
+    )
+    header = logging_setup.log_run_header(logger, config)
+
     print(f"\nV8 pipeline — config loaded, seed={config.get('seed', 42)}")
+    # The fingerprint ties these numbers to the settings that produced them.
+    # Two runs with the same fingerprint should produce identical output, which
+    # is what makes the reproducibility claim checkable rather than asserted.
+    print(f"run fingerprint: {header['fingerprint']}"
+          "   (same fingerprint => same numbers)")
 
     # --- Stage 1: ingest ---
     # Three ways in, in priority order:

@@ -654,6 +654,87 @@ close.
 
 Reporting this rather than tuning until it looks better is the deliverable.
 
+## 7. Hardening & reproducibility  *(built 20 Oct 2026)*
+
+Phases 1–6 built a model. Phase 7 makes the claim *"these are the numbers this
+code produces"* checkable by someone other than its author. Three mechanisms,
+each answering a specific way a quantitative result quietly stops being true.
+
+### 7.1 Pinned dependencies
+
+`requirements.txt` pins every dependency with `==`, not `>=`. The reason is
+specific rather than hygienic: a model's output depends on its libraries. A
+minor-version change to SciPy's `minimize` can move the L-BFGS-B stopping point,
+which moves the fitted rho, which moves every probability downstream. With `>=`,
+a clone six months from now installs different libraries and produces different
+numbers, and nobody can say which run was wrong.
+
+`test_every_dependency_is_pinned` asserts the `==`. A second test,
+`test_requirements_cover_everything_the_code_imports`, walks every module in
+`src/` and `scripts/` with `ast`, collects the third-party imports and asserts
+each one is declared — the failure mode where code works on the author's machine
+because a package happened to be installed there, and fails on a clean clone.
+
+> **A bug in the test itself, worth recording.** The first version found imports
+> by matching `^\s*(from|import)\s+(\w+)` against raw lines, and failed with a
+> missing dependency called `average` — picked up from the comment
+> `# Average ranks so tied scores...` in `src/metrics.py`. A regex cannot tell
+> code from prose; a parser can. The test now walks `ast.Import` and
+> `ast.ImportFrom` nodes, which by construction only sees real imports.
+
+### 7.2 Continuous integration
+
+`.github/workflows/tests.yml` runs on every push and pull request, on Python
+3.11 **and** 3.12 with `fail-fast: false`, so a version-specific break is
+visible rather than masked. Each job installs the pinned requirements, runs
+`pytest -v --durations=10`, and then runs the pipeline end-to-end on the bundled
+sample with `--no-save`.
+
+The pipeline run matters as much as the test suite. Unit tests can all pass
+while the stages no longer fit together — a changed return signature, a renamed
+column — and the pipeline run is the only check that the thing a reader is
+invited to run actually runs.
+
+### 7.3 Structured logging and the run fingerprint
+
+`src/logging_setup.py` separates two outputs that were previously one. The
+reports on **stdout** are for a person to read; the log on **stderr** (and
+optionally a file, via `--log-file`) is for working out why window 7 produced no
+bets. Loggers are namespaced `v8.<module>`, and `configure()` clears existing
+handlers so calling it twice does not double every line.
+
+`run_fingerprint(config)` is the reproducibility mechanism. It hashes the
+result-affecting config blocks — `seed`, `data`, `schema`, `validation`,
+`features`, `model`, `calibration`, `staking`, `backtest` — as sorted JSON and
+takes the first 16 characters of the SHA-256. Every run prints it:
+
+```
+run fingerprint: c6c0bb194dcd9ba2   (same fingerprint => same numbers)
+```
+
+The properties the tests pin:
+
+* **Stable** — the same config hashes identically across runs and processes.
+* **Sensitive** — changing `kelly_fraction` from 0.25 to 0.20 changes the hash.
+* **Cosmetically invariant** — reordering keys, or editing a comment, does not.
+  A fingerprint that changed on a whitespace edit would be ignored within a week.
+
+This converts "it reproduces" from an assertion into something falsifiable. If
+a reported ROI and a rerun disagree while the fingerprints match, the code is
+non-deterministic and that is a bug. If the fingerprints differ, the settings
+differed and the comparison was never valid. Either way the question is
+answerable, which it was not before.
+
+### 7.4 What is deliberately *not* hardened
+
+* **No retry logic or network code.** The ingest stage reads local files and
+  tells the user where to download them. Downloading inside the pipeline would
+  make a run depend on a third-party site being up, which is the opposite of
+  reproducible.
+* **No caching of fitted models.** Refitting is a few seconds and a cache is a
+  place for stale parameters to hide — the exact class of bug Phase 6 exists to
+  catch.
+
 ## References
 - Dixon, M. J. & Coles, S. G. (1997). *Modelling Association Football Scores and
   Inefficiencies in the Football Betting Market.* Applied Statistics, 46(2).
