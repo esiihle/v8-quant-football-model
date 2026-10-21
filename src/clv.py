@@ -280,13 +280,28 @@ def clv_by_band(bets, column="edge", n_bands=5, config=None):
     with_clv["band"] = pd.qcut(with_clv[column], q=n_bands, duplicates="drop",
                                labels=False)
 
-    table = with_clv.groupby("band", observed=True).agg(
-        bets=("clv_ratio", "size"),
-        mean_claimed_edge=(column, "mean"),
-        mean_clv_ratio=("clv_ratio", "mean"),
-        beat_rate=("beat_close", "mean"),
-    ).reset_index()
+    aggregations = {
+        "bets": ("clv_ratio", "size"),
+        "mean_claimed_edge": (column, "mean"),
+        "mean_clv_ratio": ("clv_ratio", "mean"),
+        "beat_rate": ("beat_close", "mean"),
+    }
+    # Probability points is the authoritative measure (see clv_summary), so it
+    # belongs in the band table too. Until 21 Oct 2026 this function reported
+    # only the odds ratio — the very measure the 18 Oct bug showed can read
+    # positive while the model is losing to the close. A diagnostic that can
+    # only be read in the misleading units is not a diagnostic.
+    if "clv_probability_points" in with_clv.columns:
+        aggregations["mean_clv_points"] = ("clv_probability_points", "mean")
+
+    table = with_clv.groupby("band", observed=True).agg(**aggregations).reset_index()
     table["band"] = table["band"] + 1
+
+    # Put the authoritative measure beside the ratio, in reading order.
+    if "mean_clv_points" in table.columns:
+        order = ["band", "bets", "mean_claimed_edge", "mean_clv_points",
+                 "mean_clv_ratio", "beat_rate"]
+        table = table[order]
     return table
 
 

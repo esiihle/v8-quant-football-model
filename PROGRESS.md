@@ -4,7 +4,7 @@
 > session. This is the fastest way to resume: read this file (plus `docs/ROADMAP.md`)
 > and you know exactly where the project stands. Newest entry at the top.
 
-**Current phase:** Phase 7 — Hardening, **complete**. Next: Phase 8 — docs & presentation
+**Current phase:** Phase 8 — Docs & presentation, **complete**. Build finished; remaining: run the exploration notebook, then the slide deck.
 **Overall status:** 🟢 Every stage built; pipeline runs end-to-end on **real** EPL
 data; **164 tests green**; CI runs the suite and a full pipeline run on two
 Python versions; every run prints a reproducibility fingerprint.
@@ -33,22 +33,72 @@ what the notebook shows.
 - [x] Phase 5 — Staking (Kelly)
 - [x] Phase 6 — Backtest & CLV
 - [x] Phase 7 — Hardening
-- [ ] Phase 8 — Docs & presentation
+- [x] Phase 8 — Docs & presentation
 
 ## How to run (current state)
 ```bash
 pip install -r requirements.txt
 python scripts/run_pipeline.py     # real data from data/raw if present, else the sample
 python scripts/run_pipeline.py --sample   # force the bundled sample
-pytest                             # 164 tests (smoke + Phases 1-7), all green
+pytest                             # 178 tests (7 skip without real data)
 python scripts/run_pipeline.py --no-save  # run the checks without writing output
 python scripts/run_pipeline.py --log-file run.log   # full diagnostic log to a file
+python scripts/make_charts.py      # regenerate every README chart + numbers.json
 # notebooks/01_exploration.ipynb   # open in VS Code, Run All
 ```
 
 ---
 
 ## Session log
+
+### 2026-10-21 — Phase 8: the README, the charts, and a measure reported wrong
+The last phase. Nothing new about football; everything about the gap between a
+result and a reader.
+
+- **`scripts/make_charts.py`** — regenerates all five README charts from one
+  pipeline run and writes `docs/charts/numbers.json` (headline figures + the
+  Phase 7 run fingerprint). `--sample`, `--only`, `--list` and `--out` for
+  working on one chart at a time.
+- **`README.md` rewritten** — leads with the honest result (in-sample +311% ROI
+  vs walk-forward −28.5%), the CLV verdict with both measures and the reason
+  they disagree, what the project shows and explicitly what it does not, and a
+  table of all six bugs found with the lesson from each.
+- **`tests/test_docs.py`** — 13 tests. The README may only link charts the
+  script writes, must show every chart it writes, may carry no placeholders, and
+  must quote the walk-forward ROI, yield, bet count, CLV interval and run
+  fingerprint **as they appear in numbers.json**. Suite now **178 tests**
+  (7 skip until charts are generated from real data).
+
+#### A measure that was fixed in one place and not the other
+`clv_by_band` aggregated `mean_clv_ratio` alone — the asymmetric measure the
+18 Oct bug showed can read positive while the model is losing to the close. So
+the sharpest diagnostic in the project ("does my claimed edge predict CLV?") was
+only readable in the units already declared misleading. Now reports
+`mean_clv_points` first, pinned by
+`test_clv_bands_report_the_authoritative_measure`.
+
+**The lesson, which generalises:** deciding which measure is authoritative is not
+finished until every place that reports it has been changed. A correct verdict in
+one function and the old measure in the one beside it is not a fixed bug — it is
+a bug with a narrower blast radius.
+
+#### Two charting faults that no test could have caught
+ROI (+409%) and yield (+2.2%) shared one axis, flattening yield to an invisible
+sliver — now two panels with independent scales. And `fig.autofmt_xdate()` calls
+`subplots_adjust` internally, which switches constrained layout off: one chart's
+subtitle printed through its title while four others were fine. Neither raises,
+logs, or fails a unit test. Both were found by opening the PNG and looking.
+
+#### The guard against the obvious mistake
+Charts built on the 12-match sample are stamped **ILLUSTRATIVE** across their
+face, `numbers.json` records `"real_data": false`, and a test refuses the commit.
+The stamp lives in `finish()`, which every chart is saved through — the same
+structural argument as the required `history` argument in `blend_goals`: make
+the safe path the only path.
+
+#### Still outstanding
+`notebooks/01_exploration.ipynb` has still never been run.
+
 
 ### 2026-10-20 — Phase 7: hardening, CI and the run fingerprint
 Phases 1–6 built a model. This session makes the claim *"these are the numbers

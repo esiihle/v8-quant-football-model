@@ -735,6 +735,76 @@ answerable, which it was not before.
   place for stale parameters to hide — the exact class of bug Phase 6 exists to
   catch.
 
+## 8. Reporting  *(built 21 Oct 2026)*
+
+The last phase produces nothing new about football. It is about the gap between
+a result and a reader, which is where quantitative work is usually lost.
+
+### 8.1 Charts as a build artefact, not a drawing
+
+`scripts/make_charts.py` regenerates every chart in the README from one pipeline
+run, and writes `docs/charts/numbers.json` alongside them — the headline figures
+plus the Phase 7 run fingerprint. The README quotes numbers from that file and
+`tests/test_docs.py` checks the two agree, to within half of the last decimal
+place quoted.
+
+This closes a loop that is usually left open. A README is the one file nobody
+re-reads after the code changes, so its numbers drift out of date silently and
+the drift is only ever found by a reader — in this case, an interviewer. Here a
+stale number fails the test suite.
+
+The five charts, and the question each answers:
+
+| Chart | Question |
+|---|---|
+| in-sample vs walk-forward | what does an honest test boundary cost? |
+| CLV distribution | is the model beating the closing line? |
+| CLV by claimed edge | does the model know *where* it is right? |
+| reliability diagram | is the model honest when it says 70%? |
+| bankroll curve | what would holding this have felt like? |
+
+### 8.2 The stamp
+
+Charts built on the bundled 12-match sample are meaningless, and a meaningless
+chart that looks real is worse than none. When the raw data is absent,
+`make_charts.py` falls back to the sample, stamps **ILLUSTRATIVE** across every
+chart, and records `"real_data": false` in `numbers.json`. A test
+(`test_committed_charts_came_from_real_data`) refuses the commit.
+
+The stamp is applied in `finish()`, which every chart is saved through, so it
+cannot be forgotten on one. That is the same structural argument as the
+`history` argument in `blend_goals` (§2): make the safe path the only path
+rather than remembering to take it.
+
+### 8.3 A chart that was reporting the wrong measure
+
+Building the CLV-by-edge chart surfaced a defect in `clv_by_band`. It aggregated
+`mean_clv_ratio` and nothing else — the odds-ratio measure that §6 establishes is
+asymmetric and can read positive while the model loses to the close. The single
+sharpest diagnostic in the project was only available in the units the project
+had already declared misleading.
+
+`clv_by_band` now reports `mean_clv_points` first, and
+`test_clv_bands_report_the_authoritative_measure` holds it there. The general
+lesson is worth stating plainly: **deciding which measure is authoritative is not
+finished until every place that reports it has been changed.** A correct verdict
+in one function and the old measure in the function beside it is not a fixed bug;
+it is a bug with a narrower blast radius.
+
+### 8.4 Two charting mistakes, both visible only on the rendered image
+
+* **ROI and yield on one axis.** The first version put both on a shared scale.
+  ROI ran to +409% and yield to +2.2%, so yield rendered as an invisible sliver
+  against the axis. Two measures of different scale get two panels — never two
+  y-axes on one chart, which invites the eye to read a relationship that is not
+  there. They are now small multiples with independent scales.
+* **A layout call that silently disabled the layout engine.**
+  `fig.autofmt_xdate()` calls `subplots_adjust` internally, which switches
+  constrained layout off; the bankroll chart's subtitle printed straight through
+  its title while four other charts were fine. Neither fault raises, logs, or
+  fails a unit test. Both were found by opening the PNG and looking at it, which
+  is the only check that catches them.
+
 ## References
 - Dixon, M. J. & Coles, S. G. (1997). *Modelling Association Football Scores and
   Inefficiencies in the Football Betting Market.* Applied Statistics, 46(2).

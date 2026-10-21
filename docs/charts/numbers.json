@@ -1,0 +1,12 @@
+{
+  "matches": 12,
+  "first_match": "2024-08-17",
+  "last_match": "2024-09-01",
+  "rho": -0.24,
+  "home_advantage": -0.09045723544159809,
+  "effective_sample_size": 11.616409867645874,
+  "ece": null,
+  "kelly_fraction": 0.25,
+  "real_data": false,
+  "run_fingerprint": "c6c0bb194dcd9ba2"
+}

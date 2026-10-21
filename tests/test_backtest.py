@@ -545,3 +545,36 @@ def test_beat_rate_is_reported_with_its_own_verdict(config):
     summary = clv.clv_summary(bets, config)
     assert summary["beat_rate"]["lower"] > 0.5
     assert "above 50%" in clv.clv_report(summary)
+
+
+# --- Added 21 Oct 2026 (Phase 8) -------------------------------------------
+
+def test_clv_bands_report_the_authoritative_measure():
+    """The band table must carry probability points, not only the odds ratio.
+
+    Until Phase 8 it reported ``mean_clv_ratio`` alone. That is the measure the
+    18 Oct bug showed can read positive while the model is losing to the close,
+    so a reader checking "does my claimed edge predict CLV?" was being handed
+    the one expression of CLV the methodology calls non-authoritative.
+    """
+    from src import clv as clv_module
+
+    n = 200
+    rng = np.random.default_rng(11)
+    taken = rng.uniform(0.25, 0.55, n)
+    closing = np.clip(taken + rng.normal(0.0, 0.03, n), 0.05, 0.9)
+
+    bets = make_bets_with_closing_market(n, taken, closing, seed=11)
+    # clv_by_band bands on the model's claimed edge, so it has to be present.
+    bets["edge"] = rng.uniform(0.0, 0.12, n)
+
+    table = clv_module.clv_by_band(bets, n_bands=4)
+
+    assert "mean_clv_points" in table.columns, (
+        "the band table must report CLV in probability points"
+    )
+    # And the authoritative measure must come first of the two.
+    columns = list(table.columns)
+    assert columns.index("mean_clv_points") < columns.index("mean_clv_ratio")
+    assert len(table) == 4
+    assert table["bets"].sum() == n
