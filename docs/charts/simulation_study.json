@@ -1,0 +1,69 @@
+{
+  "seasons_per_level": 2,
+  "matches_per_level": 760,
+  "seed": 20261023,
+  "run_fingerprint": "16cf1902ef7a29b4",
+  "no_false_positive": true,
+  "detection_threshold_points": 0.04864427586971165,
+  "levels": [
+    {
+      "bets": 466,
+      "roi": -0.8081644767952982,
+      "yield": -0.11619375721387486,
+      "clv_points": -0.015885331448193422,
+      "clv_low": -0.01765751155000919,
+      "clv_high": -0.013789300594481448,
+      "beat_rate": 0.37124463519313305,
+      "bias": 1.0,
+      "mispricing_points": 0.0,
+      "detected": false
+    },
+    {
+      "bets": 449,
+      "roi": -0.7305046091320364,
+      "yield": -0.07587507272669265,
+      "clv_points": -0.00918238872430005,
+      "clv_low": -0.01125527993596331,
+      "clv_high": -0.007080534098850453,
+      "beat_rate": 0.47884187082405344,
+      "bias": 0.95,
+      "mispricing_points": 0.01982134528789958,
+      "detected": false
+    },
+    {
+      "bets": 463,
+      "roi": -0.10248836556060122,
+      "yield": -0.005014953495921775,
+      "clv_points": 0.007421661264659829,
+      "clv_low": 0.004831817350606957,
+      "clv_high": 0.009679035108536965,
+      "beat_rate": 0.7365010799136069,
+      "bias": 0.88,
+      "mispricing_points": 0.04864427586971165,
+      "detected": true
+    },
+    {
+      "bets": 507,
+      "roi": 5.565978245173509,
+      "yield": 0.06754667727124443,
+      "clv_points": 0.03340251893137258,
+      "clv_low": 0.030255778464066272,
+      "clv_high": 0.03644209500787377,
+      "beat_rate": 0.9013806706114399,
+      "bias": 0.8,
+      "mispricing_points": 0.08310802008837079,
+      "detected": true
+    }
+  ],
+  "noise_control": {
+    "bets": 1093,
+    "roi": -0.9905261230924325,
+    "yield": -0.152301281492149,
+    "clv_points": -0.011999852151624144,
+    "clv_low": -0.01312808920518728,
+    "clv_high": -0.010908372471588046,
+    "beat_rate": 0.3879231473010064,
+    "detected": false
+  },
+  "note": "Simulated data. The edge in each biased level exists because it was planted. This measures what the BACKTESTER can detect, and makes no claim about real betting markets."
+}

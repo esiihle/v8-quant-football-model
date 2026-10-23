@@ -805,6 +805,101 @@ it is a bug with a narrower blast radius.
   fails a unit test. Both were found by opening the PNG and looking at it, which
   is the only check that catches them.
 
+### 8.5 The stamp became a refusal  *(22 Oct 2026)*
+
+§8.2 described the ILLUSTRATIVE stamp as the guard against committing
+sample-built charts as results. On 21 October that guard was tested in
+production and lost: three stamped charts from the 12-match sample were
+committed, and the README was published referencing two more that the sample
+run had skipped entirely — so the repository's front page carried three
+meaningless charts and two broken images.
+
+Nothing malfunctioned. The stamp appeared, `numbers.json` recorded
+`"real_data": false`, and `test_committed_charts_came_from_real_data` would
+have failed. **Every control worked and the wrong thing happened anyway**,
+because all of them were advisory: a warning is something a person can walk
+past, and at the end of a long session a person will.
+
+The guard is now a refusal. `make_charts.py` will not write into `docs/charts/`
+from sample data; it exits with a non-zero status and names the two legitimate
+alternatives (`--out` somewhere else, or `--allow-sample` asked for by name).
+The check runs *before* any computation, from the filesystem alone, so a run
+that cannot produce publishable output says so in a second rather than after a
+full walk-forward backtest.
+
+The distinction is worth carrying beyond this project:
+
+> **A control that reports a problem is not the same as a control that prevents
+> one.** Whether the difference matters depends entirely on whether anyone is
+> reading at the moment it fires — which is exactly when they are least likely
+> to be.
+
+The same reasoning produced the required `history` argument in `blend_goals`
+(§2) and the finite `INVALID_PENALTY` in §3: make the wrong outcome
+unrepresentable rather than merely visible.
+
+### 8.6 Validating the instrument  *(built 23 Oct 2026)*
+
+Every section above reports a number. None of them establishes that the
+machinery producing those numbers can tell signal from noise — and a backtester
+that reports "+4% CLV" is worthless unless it would have reported nothing had
+there been nothing there.
+
+`scripts/simulation_study.py` answers that prior question. It generates markets
+whose properties are known by construction, because the data-generating process
+is written in the file: a bivariate Poisson world with Dixon-Coles dependence,
+priced by a bookmaker with a stated margin, estimation noise, and — in the
+biased arms — a deliberate understatement of home advantage that the closing
+line then corrects toward the truth.
+
+#### The result
+
+| mispricing planted | measured CLV | detected? |
+|---|---|---|
+| none (efficient book) | −1.59% [−1.77%, −1.38%] | no |
+| 2.0 probability points | −0.92% [−1.13%, −0.71%] | no |
+| 4.9 probability points | +0.74% [+0.48%, +0.97%] | **yes** |
+| 8.3 probability points | +3.34% [+3.03%, +3.64%] | **yes** |
+| *control:* random model, efficient book | −1.20% [−1.31%, −1.09%] | no |
+
+Two properties are established, and the second matters more:
+
+1. **The instrument responds.** Measured CLV is monotonic in the planted
+   mispricing and crosses zero where it should.
+2. **The instrument does not hallucinate.** It reports no edge on an efficient
+   book, and none for a model betting random probabilities. A backtester that
+   invents edges is worse than one that finds none.
+
+#### Why the threshold is the deliverable
+
+**On 760 matches this pipeline can establish an edge once the book is wrong by
+about 5 probability points, and not below that.** That is a statement about
+statistical power, and it is what makes any real-data result interpretable: a
+measured CLV near zero means *no edge of detectable size*, not *no edge*. Those
+are different claims, and only one of them is supportable.
+
+It also sets the bar for the project's own real-data run. If that run reports a
+CLV inside ±5 points, the honest reading is that the question is unresolved at
+this sample size — which is a more useful thing to be able to say than either
+"it works" or "it doesn't".
+
+#### A bug the study found in itself
+
+The first version of `price()` could emit decimal odds **below 1.00** — an
+impossible price, and one `validation.min_odds` would reject had it arrived in a
+real file. The simulator was producing data its own pipeline would refuse.
+
+Caught by `test_the_simulated_odds_form_a_coherent_book`, which applies to the
+simulator exactly the checks `verify_raw_data.py` applies to a download: three
+prices must imply probabilities summing to a little over one, and the closing
+book must be thinner than the opening one. Fixed by capping any single outcome
+at 0.92 before the margin is loaded, then renormalising.
+
+The general point is the one running through §8.5 and §10 of the companion
+project: **a tool that cannot fail loudly will eventually fail quietly.** A
+simulator held to a weaker standard than the data it stands in for is exactly
+that kind of tool.
+
 ## References
 - Dixon, M. J. & Coles, S. G. (1997). *Modelling Association Football Scores and
   Inefficiencies in the Football Betting Market.* Applied Statistics, 46(2).

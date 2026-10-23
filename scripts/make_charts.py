@@ -480,6 +480,47 @@ BUILDERS = {
 
 # --- Running the pipeline to get the numbers -------------------------------
 
+def will_use_sample(config, forced):
+    """Will this run fall back to the bundled sample? Answerable before any work."""
+    if forced:
+        return True
+    return not any(f["exists"] for f in ingest.expected_raw_files(config))
+
+
+def refuse_illustrative_output(out_dir, allow_sample):
+    """Stop sample-built charts from ever landing in the published folder.
+
+    The ILLUSTRATIVE stamp was a warning, and a warning is something a person
+    can commit anyway — on 21 Oct 2026 exactly that happened on the companion
+    football project: stamped charts from a 12-match sample were committed and
+    shown on the repository's front page, with two charts missing entirely.
+
+    A warning that can be walked past is not a control. Writing into the
+    published charts folder from sample data is now refused outright. The
+    override exists (--allow-sample) because looking at a chart's LAYOUT on
+    sample data is a legitimate thing to want; it has to be asked for by name.
+    """
+    published = (REPO_ROOT / "docs" / "charts").resolve()
+    try:
+        targets_published = out_dir.resolve() == published
+    except OSError:
+        targets_published = False
+
+    if targets_published and not allow_sample:
+        print("\n  REFUSED — these charts would be built from the bundled sample,")
+        print("  and docs/charts/ is what the README publishes.")
+        print()
+        print("  Either:")
+        print("    * put the real data in place and run this again, or")
+        print("    * send the sample charts somewhere else, e.g.")
+        print("        python scripts/make_charts.py --sample --out /tmp/preview")
+        print("    * or, to overrule this deliberately:")
+        print("        python scripts/make_charts.py --sample --allow-sample")
+        print()
+        return True
+    return False
+
+
 def gather(config, use_sample, verbose=False):
     """Run the stages the charts need and collect everything in one dict."""
     numbers = {}
@@ -604,6 +645,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", default=str(REPO_ROOT / "config.yaml"))
+    parser.add_argument("--allow-sample", action="store_true",
+                        help="Permit writing sample-built charts into "
+                             "docs/charts (refused by default)")
     parser.add_argument("--sample", action="store_true",
                         help="Force the bundled sample (charts get stamped)")
     parser.add_argument("--only", choices=sorted(CHARTS), action="append",
@@ -626,6 +670,12 @@ def main():
     config = load_config(args.config)
     set_seed(config.get("seed", 42))
     out_dir = Path(args.out) if args.out else REPO_ROOT / "docs" / "charts"
+
+    # Checked BEFORE any work: a run that cannot produce publishable charts
+    # should say so in a second, not after a full walk-forward backtest.
+    if will_use_sample(config, args.sample) and refuse_illustrative_output(
+            out_dir, args.allow_sample):
+        return 2
 
     print("\nV8 — building the README charts")
     print(f"  fingerprint: {logging_setup.run_fingerprint(config)}\n")

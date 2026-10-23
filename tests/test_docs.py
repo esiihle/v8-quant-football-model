@@ -42,6 +42,26 @@ def readme():
     return README.read_text(encoding="utf-8")
 
 
+def collapse(text):
+    """Whitespace-normalised, lowercased text, for matching a wrapped phrase.
+
+    A phrase check against the raw file fails the moment the sentence wraps
+    across a line — which says nothing about the README and everything about
+    the test.
+    """
+    return " ".join(text.split()).lower()
+
+
+@pytest.fixture(scope="module")
+def simulation_script():
+    """The simulation study owns one chart of its own."""
+    spec = importlib.util.spec_from_file_location(
+        "simulation_study", REPO_ROOT / "scripts" / "simulation_study.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 @pytest.fixture(scope="module")
 def chart_script():
     """Import scripts/make_charts.py for its CHARTS manifest.
@@ -64,15 +84,30 @@ def numbers():
             "`python scripts/make_charts.py` on real data first. On a clone "
             "without data/raw this is expected."
         )
-    return json.loads(NUMBERS.read_text())
+    recorded = json.loads(NUMBERS.read_text())
+
+    # A numbers.json built from the bundled sample is itself the bug, not a
+    # reason to skip: it means sample output reached the published folder. Fail
+    # here with the cause, rather than letting every downstream test die on a
+    # KeyError for a figure the sample run never produced.
+    if recorded.get("real_data") is not True:
+        pytest.fail(
+            "docs/charts/numbers.json came from the bundled sample "
+            f"({recorded.get('matches', recorded.get('n_train', '?'))} rows). "
+            "Delete docs/charts/, put the real data in data/raw/, and run "
+            "`python scripts/make_charts.py` again."
+        )
+    return recorded
 
 
 # --- Always run ------------------------------------------------------------
 
-def test_readme_only_links_charts_the_script_writes(readme, chart_script):
+def test_readme_only_links_charts_the_script_writes(readme, chart_script,
+                                                    simulation_script):
     """A broken image in a README is a broken promise on the front page."""
     linked = set(re.findall(r"docs/charts/([\w.-]+\.png)", readme))
-    produced = set(chart_script.CHARTS.values())
+    produced = (set(chart_script.CHARTS.values())
+                | set(simulation_script.CHARTS.values()))
 
     unknown = linked - produced
     assert not unknown, (
@@ -81,9 +116,11 @@ def test_readme_only_links_charts_the_script_writes(readme, chart_script):
     assert linked, "the README should show the charts"
 
 
-def test_every_chart_the_script_writes_is_shown(chart_script, readme):
+def test_every_chart_the_script_writes_is_shown(chart_script, readme,
+                                                simulation_script):
     """A chart nobody looks at is a chart nobody maintains."""
-    produced = set(chart_script.CHARTS.values())
+    produced = (set(chart_script.CHARTS.values())
+                | set(simulation_script.CHARTS.values()))
     linked = set(re.findall(r"docs/charts/([\w.-]+\.png)", readme))
 
     unused = produced - linked
@@ -189,10 +226,242 @@ def test_committed_charts_came_from_real_data(numbers):
 
 
 def test_every_chart_the_readme_shows_exists_on_disk(readme):
-    """Only meaningful once charts are committed; skips before that."""
-    linked = set(re.findall(r"docs/charts/([\w.-]+\.png)", readme))
-    if not any((CHART_DIR / name).exists() for name in linked):
-        pytest.skip("no charts committed yet — run scripts/make_charts.py")
+    """Charts the README shows must be in the repo — with one exemption.
 
+    While the real-data section carries its "Awaiting regeneration" notice, the
+    charts belonging to it legitimately do not exist: they are produced by a run
+    against raw season files that has not happened. Requiring them would force
+    the choice between a red suite and committing charts from the wrong data,
+    and that second option is the mistake this project already made once.
+
+    The exemption is tied to the notice, so it expires with it: delete the
+    notice and every linked chart must be present.
+    """
+    linked = set(re.findall(r"docs/charts/([\w.-]+\.png)", readme))
     missing = [name for name in linked if not (CHART_DIR / name).exists()]
+    if not missing:
+        return
+
+    if "awaiting regeneration" in collapse(readme):
+        # Only the real-data charts may be missing. Anything the simulation
+        # study produces is reproducible with no download and must be present.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "simulation_study", REPO_ROOT / "scripts" / "simulation_study.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        still_missing = [n for n in missing if n in module.CHARTS.values()]
+        assert not still_missing, (
+            "the simulation study's charts need no raw data, so they may not "
+            f"be missing: {still_missing}. Run scripts/simulation_study.py"
+        )
+        return
+
     assert not missing, f"README shows charts that are not in the repo: {missing}"
+
+
+# --- Added 22 Oct 2026: the guard that was missing -------------------------
+
+def test_sample_charts_cannot_be_written_into_the_published_folder(chart_script):
+    """docs/charts is what the README publishes, so sample data may not reach it.
+
+    On 21 Oct 2026 the football project committed three ILLUSTRATIVE-stamped
+    charts built from a 12-match sample, and shipped a README referencing two
+    more that did not exist. The stamp had worked exactly as designed — and a
+    stamp is a warning, which is something a person can walk past.
+
+    `refuse_illustrative_output` turns the warning into a refusal: it returns
+    True (refuse) for the published folder and False (allow) for anywhere else,
+    so previewing a chart's layout on sample data stays easy and publishing one
+    stops being possible by accident.
+    """
+    published = REPO_ROOT / "docs" / "charts"
+
+    # The published folder, without the override: refused.
+    assert chart_script.refuse_illustrative_output(published, False) is True
+
+    # The same folder with the override asked for by name: allowed.
+    assert chart_script.refuse_illustrative_output(published, True) is False
+
+    # Anywhere else: always allowed, override or not.
+    elsewhere = REPO_ROOT / "build" / "preview"
+    assert chart_script.refuse_illustrative_output(elsewhere, False) is False
+
+
+def test_the_refusal_is_decided_before_any_work_is_done(chart_script):
+    """`will_use_sample` must answer from the filesystem alone.
+
+    The first version of this guard ran after `gather()`, which meant a run
+    doomed to be refused still paid for a full pipeline — on the football
+    project, an entire walk-forward backtest — before saying so.
+    """
+    from src.config import load_config
+    config = load_config()
+
+    # Forced sample mode is knowable without touching the pipeline.
+    assert chart_script.will_use_sample(config, forced=True) is True
+    # And the unforced answer is a bool, derived from whether raw data exists.
+    assert isinstance(chart_script.will_use_sample(config, forced=False), bool)
+
+
+def test_unverified_numbers_carry_a_notice_and_verified_ones_do_not():
+    """The README may assert figures OR flag them, never neither, never both.
+
+    Two directions, one test:
+
+    * No `numbers.json` means no run of this repository has produced the
+      figures in the README. They stay, because deleting the results section
+      would be worse, but they must be marked unverified.
+    * Once `numbers.json` exists, the other tests in this module check every
+      figure against it — so the notice is then false and must be removed.
+
+    This exists because of 21 October 2026, when this README was committed
+    quoting numbers no run on this machine had ever produced, with no mark
+    saying so.
+    """
+    readme = README.read_text(encoding="utf-8")
+    flagged = "awaiting regeneration" in readme.lower()
+
+    if NUMBERS.exists():
+        assert not flagged, (
+            "docs/charts/numbers.json exists, so the figures are verified "
+            "against a real run — remove the 'Awaiting regeneration' notice "
+            "from the README."
+        )
+    else:
+        assert flagged, (
+            "no docs/charts/numbers.json, so nothing has verified the figures "
+            "in this README. Either regenerate them with "
+            "`python scripts/make_charts.py` or mark the section "
+            "'Awaiting regeneration'."
+        )
+
+
+# --- The data verifier -----------------------------------------------------
+
+def test_the_data_verifier_rejects_the_three_ways_a_mirror_fails(tmp_path):
+    """Any candidate file must be checkable before the pipeline trusts it.
+
+    football-data.co.uk is blocked on some networks, so mirrors get used. They
+    fail in three characteristic ways, and all three produce a file that looks
+    right from the outside:
+
+      1. the closing-odds columns are dropped  -> CLV cannot be computed
+      2. closing odds are a copy of the opening -> CLV reads zero, always
+      3. an HTML error page saved with a .csv name
+
+    The third is caught by any reader. The first two are not: the pipeline
+    would run, produce charts, and report a CLV of zero as though it had
+    measured something.
+    """
+    import importlib.util
+    import numpy as np
+    import pandas as pd
+
+    spec = importlib.util.spec_from_file_location(
+        "verify_raw_data", REPO_ROOT / "scripts" / "verify_raw_data.py")
+    verifier = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verifier)
+
+    from src.config import load_config
+    config = load_config()
+
+    # A plausible season: coherent books, sensible goals, sharper close.
+    rng = np.random.default_rng(0)
+    n = 380
+    home = rng.uniform(0.25, 0.60, n)
+    draw = (1 - home) * 0.45
+    away = 1 - home - draw
+    frame = pd.DataFrame({
+        "Date": pd.date_range("2024-08-10", periods=n, freq="D").strftime("%d/%m/%Y"),
+        "HomeTeam": "A", "AwayTeam": "B",
+        "FTHG": rng.poisson(1.5, n), "FTAG": rng.poisson(1.2, n),
+        "B365H": 1 / (home * 1.05), "B365D": 1 / (draw * 1.05),
+        "B365A": 1 / (away * 1.05),
+        "PSCH": 1 / (home * 1.02), "PSCD": 1 / (draw * 1.02),
+        "PSCA": 1 / (away * 1.02),
+    })
+    frame["FTR"] = np.where(frame["FTHG"] > frame["FTAG"], "H",
+                            np.where(frame["FTHG"] < frame["FTAG"], "A", "D"))
+
+    good = tmp_path / "good.csv"
+    frame.to_csv(good, index=False)
+    verdict, failures, _, _ = verifier.describe(good, config)
+    assert not failures, f"a sound file was rejected: {failures}"
+    assert verdict.startswith("USABLE")
+
+    # 1. closing odds dropped
+    dropped = tmp_path / "no_closing.csv"
+    frame.drop(columns=["PSCH", "PSCD", "PSCA"]).to_csv(dropped, index=False)
+    _, failures, _, _ = verifier.describe(dropped, config)
+    assert any("closing odds" in f for f in failures)
+
+    # 2. closing odds copied from the opening price
+    copied = tmp_path / "copied.csv"
+    duplicate = frame.copy()
+    duplicate[["PSCH", "PSCD", "PSCA"]] = duplicate[["B365H", "B365D", "B365A"]].to_numpy()
+    duplicate.to_csv(copied, index=False)
+    _, failures, _, _ = verifier.describe(copied, config)
+    assert any("identical to" in f for f in failures), (
+        "a closing column copied from the opening price must be refused — "
+        "otherwise CLV is measured against itself and reads zero"
+    )
+
+    # 3. an error page wearing a .csv extension
+    page = tmp_path / "error.csv"
+    page.write_text("<html><body>404 Not Found</body></html>\n")
+    _, failures, _, _ = verifier.describe(page, config)
+    assert failures
+
+
+def test_the_verifier_checks_the_odds_are_a_coherent_book(tmp_path):
+    """Headers can be right while the numbers underneath are nonsense.
+
+    Three decimal prices from a real bookmaker imply probabilities summing to a
+    little over 1 — the overround. Prices that sum to 0.84, or to 1.6, did not
+    come from a book, whatever the column is called.
+    """
+    import importlib.util
+    import numpy as np
+    import pandas as pd
+
+    spec = importlib.util.spec_from_file_location(
+        "verify_raw_data", REPO_ROOT / "scripts" / "verify_raw_data.py")
+    verifier = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verifier)
+
+    from src.config import load_config
+    config = load_config()
+
+    n = 380
+    frame = pd.DataFrame({
+        "Date": pd.date_range("2024-08-10", periods=n, freq="D").strftime("%d/%m/%Y"),
+        "HomeTeam": "A", "AwayTeam": "B",
+        "FTHG": 2, "FTAG": 1, "FTR": "H",
+        # Prices that imply probabilities summing to ~0.6 — not a book.
+        "B365H": 5.0, "B365D": 5.0, "B365A": 5.0,
+        "PSCH": 2.0, "PSCD": 3.5, "PSCA": 4.0,
+    })
+    path = tmp_path / "nonsense_book.csv"
+    frame.to_csv(path, index=False)
+
+    _, failures, _, _ = verifier.describe(path, config)
+    assert any("coherent set of prices" in f for f in failures)
+
+
+def test_the_simulation_study_is_labelled_as_simulated_in_the_readme(readme):
+    """The one thing a simulated headline must never do is look measured.
+
+    The README leads with a result from generated data. That is legitimate —
+    it validates the instrument — but only while every reader can see at a
+    glance that no real market was involved.
+    """
+    lowered = collapse(readme)
+    assert "simulat" in lowered
+    assert ("makes no claim about real" in lowered
+            or "no claim about real betting" in lowered
+            or "not a claim about real" in lowered), (
+        "the README must state explicitly that the simulation makes no claim "
+        "about real betting markets"
+    )

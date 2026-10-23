@@ -4,7 +4,7 @@
 > session. This is the fastest way to resume: read this file (plus `docs/ROADMAP.md`)
 > and you know exactly where the project stands. Newest entry at the top.
 
-**Current phase:** Phase 8 — Docs & presentation, **complete**. Build finished; remaining: run the exploration notebook, then the slide deck.
+**Current phase:** Complete. Headline result is the simulation study (reproducible, no download). Real-data figures remain unverified pending a reachable source.
 **Overall status:** 🟢 Every stage built; pipeline runs end-to-end on **real** EPL
 data; **164 tests green**; CI runs the suite and a full pipeline run on two
 Python versions; every run prints a reproducibility fingerprint.
@@ -50,6 +50,133 @@ python scripts/make_charts.py      # regenerate every README chart + numbers.jso
 ---
 
 ## Session log
+
+### 2026-10-23 — V8 gets a headline that needs no download
+football-data.co.uk is unreachable from this network — browser, PowerShell and
+curl all time out at TCP connect, while the site itself is up and was fetched
+successfully from elsewhere. The mirrors that exist (footballcsv, openfootball)
+reformat to a handful of columns and **strip every odds field**, which is the
+one thing V8 needs.
+
+Rather than keep hunting, the project now answers a better question.
+
+#### scripts/simulation_study.py — can this backtester tell signal from noise?
+Markets generated with properties known by construction, swept over the size of
+the mispricing planted in the book:
+
+| mispricing | measured CLV | detected? |
+|---|---|---|
+| none (efficient) | −1.59% [−1.77%, −1.38%] | no |
+| 2.0 points | −0.92% [−1.13%, −0.71%] | no |
+| 4.9 points | +0.74% [+0.48%, +0.97%] | **yes** |
+| 8.3 points | +3.34% [+3.03%, +3.64%] | **yes** |
+| control: random model | −1.20% [−1.31%, −1.09%] | no |
+
+- **The instrument responds** — CLV monotonic in the planted edge, crossing zero
+  where it should.
+- **The instrument does not hallucinate** — no edge reported on an efficient
+  book, none from a model betting random probabilities.
+- **Detection threshold: ~5 probability points on 760 matches.** A power
+  statement, and the thing that makes any real-data CLV interpretable: near zero
+  means *no edge of detectable size*, not *no edge*.
+
+This is a complete, reproducible headline result requiring no data download, and
+it is arguably stronger than the real-data number would have been on its own —
+it is what a model-validation function would demand before trusting a backtest.
+
+#### The study found a bug in itself
+`price()` could emit decimal odds **below 1.00** — impossible, and rejected by
+`validation.min_odds` had it come from a real file. The simulator was producing
+data its own pipeline would refuse. Caught by
+`test_the_simulated_odds_form_a_coherent_book`, which holds the simulator to the
+same checks `verify_raw_data.py` applies to a download. Fixed by capping any
+single outcome at 0.92 before the margin is loaded.
+
+#### Also
+- README now leads with the simulation study; the real-data section keeps its
+  **Awaiting regeneration** notice.
+- `test_every_chart_the_readme_shows_exists_on_disk` exempts the real-data
+  charts **while that notice stands**, and the exemption expires with it — so
+  the choice is never between a red suite and committing charts from the wrong
+  data. The simulation charts get no exemption: they need no download.
+- `tests/test_simulation.py` — 10 tests. Suite now **194** (188 passed,
+  6 skipped without raw data).
+
+#### Still outstanding
+Raw season files, if a reachable source turns up. `scripts/verify_raw_data.py`
+checks any candidate in seconds. `notebooks/01_exploration.ipynb` has still
+never been run.
+
+
+### 2026-10-22 — The stamp lost in production; the numbers are unverified
+Pulled yesterday's Phase 8 commit and found two faults, one of them mine from
+an earlier session.
+
+**1. Sample charts were published.** `make_charts.py` had fallen back to the
+bundled 12-match sample, so `docs/charts/` held three ILLUSTRATIVE-stamped
+charts and `numbers.json` said `"real_data": false` — while the README
+referenced five charts, two of which the sample run had skipped. The front page
+showed three meaningless charts and two broken images.
+
+Nothing malfunctioned. The stamp appeared, the flag was recorded, and
+`test_committed_charts_came_from_real_data` would have failed. **Every control
+worked and the wrong thing happened anyway**, because all of them were
+advisory.
+
+- `make_charts.py` now **refuses** to write into `docs/charts/` from sample
+  data, exits non-zero, and names the two legitimate alternatives (`--out`
+  elsewhere, or `--allow-sample` by name).
+- The check runs **before any computation**, from the filesystem alone — the
+  first version ran after `gather()`, so a doomed run paid for a full
+  walk-forward backtest before being refused.
+- `test_sample_charts_cannot_be_written_into_the_published_folder` and
+  `test_the_refusal_is_decided_before_any_work_is_done` pin both properties.
+- The committed sample charts and `numbers.json` are deleted.
+
+**2. This README's figures have never been reproduced here.** The companion
+scorecard project was found today to have documented numbers taken from a run
+made on *synthetic* data — wrong by a factor of three, with two conclusions
+inverted. V8's headline figures (ROI −28.5%, 413 bets, CLV −0.67%) come from the
+same kind of session and `data/raw/` has never held the season files on this
+machine, so they are unverified by the same standard.
+
+They stay in the README for now — deleting the results section would be worse —
+but under an **Awaiting regeneration** notice, and
+`test_unverified_numbers_carry_a_notice_and_verified_ones_do_not` enforces the
+rule in both directions: no `numbers.json` means the notice is required; once
+`numbers.json` exists the notice is false and must go, at which point the other
+tests check every figure against it.
+
+#### The rule this leaves behind
+A control that *reports* a problem is not the same as a control that *prevents*
+one, and the difference only matters when nobody is reading — which is exactly
+when it fires. The required `history` argument in `blend_goals` and the finite
+`INVALID_PENALTY` are the same move: make the wrong outcome unrepresentable
+rather than merely visible.
+
+#### Added: scripts/verify_raw_data.py
+football-data.co.uk is unreachable from this machine's network (three clients
+time out at TCP connect; the site itself is up and was fetched successfully
+elsewhere). Mirrors exist, and they fail in three characteristic ways — two of
+them silently:
+
+1. the closing-odds columns are dropped → CLV cannot be computed
+2. closing odds are a **copy of the opening price** → CLV reads zero forever,
+   and the pipeline runs, charts and all, as though it had measured something
+3. an HTML error page saved with a `.csv` name
+
+The verifier checks columns, row count, goal and home-win rates, and — the
+strongest check — whether the three prices form a **coherent book**: a real
+bookmaker's odds imply probabilities summing to between 1.00 and 1.12. Prices
+summing to 0.6 did not come from a book, whatever the column is called.
+
+Two tests pin it, including the copied-closing case, which is the one that would
+otherwise have produced a confident zero.
+
+#### Next action
+Download `E0_2324.csv` and `E0_2425.csv` into `data/raw/`, run
+`python scripts/make_charts.py`, delete the notice, and commit the real charts.
+
 
 ### 2026-10-21 — Phase 8: the README, the charts, and a measure reported wrong
 The last phase. Nothing new about football; everything about the gap between a

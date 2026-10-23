@@ -9,9 +9,57 @@
 
 ---
 
-## The headline result
+## Does this backtester work?
 
-**The model does not beat the closing line, and this README says so.**
+Before asking whether a betting model is profitable, there is a prior question
+that almost no backtest answers: **can the machinery tell signal from noise?**
+A pipeline reporting "+4% CLV" is worthless unless you know it would have
+reported nothing had there been nothing there.
+
+`scripts/simulation_study.py` settles it. Three simulated markets whose
+properties are known *by construction*, because the data-generating process is
+written in the file:
+
+![what this backtester can and cannot see](docs/charts/simulation-detection-threshold.png)
+
+| Market | Truth | Measured CLV | Verdict |
+|---|---|---|---|
+| Efficient book | no edge exists | −1.59% [−1.77%, −1.38%] | correctly reports none |
+| Underpriced by 2.0% | small edge | −0.92% [−1.13%, −0.71%] | below detection |
+| Underpriced by 4.9% | real edge | **+0.74% [+0.48%, +0.97%]** | **finds it** |
+| Underpriced by 8.3% | large edge | **+3.34% [+3.03%, +3.64%]** | **finds it** |
+| *Control:* random model, efficient book | no edge, no information | −1.20% [−1.31%, −1.09%] | invents nothing |
+
+Two things are established here, and the second matters more than the first:
+
+1. **The instrument responds.** Measured CLV rises monotonically with the
+   mispricing planted in the book, and crosses zero where it should.
+2. **The instrument does not hallucinate.** On an efficient book, and on a model
+   betting random probabilities, it reports no edge. A backtester that invents
+   edges is worse than useless, and that is the failure this control rules out.
+
+**The detection threshold is the number to quote: on 760 matches this pipeline
+can establish an edge once the bookmaker is wrong by about 5 probability points,
+and not below that.** It is a statement about statistical power, and it is what
+makes any future real-data result interpretable — a measured CLV near zero means
+"no edge of detectable size", not "no edge".
+
+> **This is simulated data and makes no claim about real betting markets.** The
+> edge in each biased market exists because it was deliberately put there.
+> Reproduce it with `python scripts/simulation_study.py` — no download required,
+> and `tests/test_simulation.py` checks the generator produces coherent books
+> and a closing line that genuinely corrects toward the truth.
+
+## The result on real matches
+
+> **Awaiting regeneration (22 Oct 2026).** The figures in this section have not
+> yet been reproduced by a run of this repository against the raw season files.
+> The companion credit-scorecard project found its own documented numbers were
+> taken from a run made on synthetic data and were wrong by a factor of three,
+> so these are treated as unverified until `python scripts/make_charts.py`
+> regenerates them from `data/raw/`. This notice is required by
+> `tests/test_docs.py` and must be deleted once that run exists — at which point
+> the same suite checks every number below against it.
 
 | | In-sample | Walk-forward |
 |---|---|---|
@@ -26,8 +74,9 @@ it is the single most useful number in this repository.
 
 ![in-sample vs walk-forward](docs/charts/in-sample-vs-walk-forward.png)
 
-The walk-forward interval includes zero, so even the *loss* is not statistically
-established on 413 bets. That is precisely the situation closing-line value
+On these figures **the model does not beat the closing line.** The walk-forward
+interval includes zero, so even the *loss* is not statistically established on
+413 bets. That is precisely the situation closing-line value
 exists for: with too few bets to settle the question from profit alone, CLV asks
 whether the model is finding prices the market later agrees were wrong.
 
@@ -138,13 +187,30 @@ cd v8-quant-football-model
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-pytest                                   # 178 tests (7 skip until
-                                         # the charts are generated)
+pytest                                   # the full suite
 python scripts/run_pipeline.py --sample  # runs on the bundled 12-match sample
+python scripts/simulation_study.py       # the study above — no data needed
 ```
 
+The simulation study needs nothing downloaded: it generates its own markets and
+takes a few minutes. It is the one headline in this README that any reader can
+reproduce immediately.
+
 For the real numbers, download the two season files the pipeline names on
-startup into `data/raw/`, then:
+startup into `data/raw/`. The source is a betting-odds site and is blocked on
+some networks; any mirror will do provided it carries the closing-odds columns,
+and `scripts/verify_raw_data.py` checks a candidate file before you trust it:
+
+```bash
+python scripts/verify_raw_data.py data/raw/*.csv
+```
+
+It refuses a file whose closing odds are missing or are a copy of the opening
+price — the second being the quiet failure, since the pipeline would run and
+report a CLV of zero as though it had measured something. Any two or more
+seasons work; `config.yaml` names which.
+
+Then:
 
 ```bash
 python scripts/run_pipeline.py           # the full pipeline
@@ -183,7 +249,7 @@ Every component is a transferable quant/credit-risk technique:
 ```
 src/            ingest, features, dixon_coles, calibrate, staking, backtest, clv, metrics
 tests/          178 tests; the fragile numerics and every bug above
-scripts/        run_pipeline.py (end to end) · make_charts.py (every chart here)
+scripts/        run_pipeline.py · make_charts.py · simulation_study.py · verify_raw_data.py
 docs/           methodology.md · OVERVIEW.md · ROADMAP.md · charts/
 notebooks/      exploration
 .github/        CI: pytest + a full pipeline run, on Python 3.11 and 3.12
