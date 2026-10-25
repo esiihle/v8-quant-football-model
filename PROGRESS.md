@@ -4,13 +4,15 @@
 > session. This is the fastest way to resume: read this file (plus `docs/ROADMAP.md`)
 > and you know exactly where the project stands. Newest entry at the top.
 
-**Current phase:** Complete. Headline result is the simulation study (reproducible, no download). Real-data figures remain unverified pending a reachable source.
-**Overall status:** 🟢 Every stage built; pipeline runs end-to-end on **real** EPL
-data; **164 tests green**; CI runs the suite and a full pipeline run on two
+**Current phase:** Complete. Real-data figures **regenerated and verified** 25 Oct
+2026 from rebuilt EPL 2023/24–2024/25 files; every figure in README and
+methodology is checked against `docs/charts/numbers.json` by `tests/test_docs.py`.
+**Overall status:** 🟢 Every stage built and run on real data; **208 tests, 0
+skipped** with data present; CI runs the suite and a full pipeline run on two
 Python versions; every run prints a reproducibility fingerprint.
-**Next action:** Run the exploration notebook and fill in its findings table
-(carried over from 1 Oct), then review the Phase 1 data-quality report against
-what the notebook shows.
+**Next action:** Extend to more seasons (the mirrors carry Pinnacle closing odds
+back to 2012/13) to shrink the detection threshold, then run the exploration
+notebook and fill in its findings table (carried over from 1 Oct).
 **Schedule:** baselined from 28 Sep 2026; target presentation **18 Dec 2026**.
 **Cadence:** one commit per working day (missed 29 Sep — first and last).
 
@@ -20,8 +22,11 @@ what the notebook shows.
 - [x] **Real data source:** football-data.co.uk, EPL (`E0`), seasons 2023/24 and
       2024/25 — chosen because it carries pre-match *and* closing odds in one
       file, which is what makes CLV measurable. Settled 30 Sep 2026.
-- [ ] **De-vig method** for market-implied probabilities (proportional vs. Shin) —
-      settle before Phase 5 staking.
+- [x] **De-vig method:** Shin — settled 14 Oct 2026 (see that entry).
+- [x] **Data access:** football-data.co.uk is blocked on the author's network;
+      files are rebuilt from two GitHub mirrors by
+      `scripts/rebuild_raw_from_mirrors.py`, with a cross-mirror score audit.
+      Settled 23 Oct 2026.
 
 ## Phase checklist
 - [x] Documentation (OVERVIEW, README, ROADMAP, methodology, LICENSE, .gitignore)
@@ -40,7 +45,9 @@ what the notebook shows.
 pip install -r requirements.txt
 python scripts/run_pipeline.py     # real data from data/raw if present, else the sample
 python scripts/run_pipeline.py --sample   # force the bundled sample
-pytest                             # 178 tests (7 skip without real data)
+pytest                             # 208 tests, none skip once numbers.json exists
+python scripts/rebuild_raw_from_mirrors.py --odds ../mirror-odds --shots ../mirror-shots
+python scripts/verify_raw_data.py data/raw/*.csv
 python scripts/run_pipeline.py --no-save  # run the checks without writing output
 python scripts/run_pipeline.py --log-file run.log   # full diagnostic log to a file
 python scripts/make_charts.py      # regenerate every README chart + numbers.json
@@ -50,6 +57,89 @@ python scripts/make_charts.py      # regenerate every README chart + numbers.jso
 ---
 
 ## Session log
+
+### 2026-10-25 — The real numbers, two reporting bugs, and where the CLV went
+football-data.co.uk is still blocked, but two GitHub mirrors of it together
+carry everything: `AnishKhetani/premier-league-data` (every bookmaker's odds,
+including Pinnacle's close) and `datasets/football-datasets` (shots, original
+column names). `scripts/rebuild_raw_from_mirrors.py` (committed 23 Oct) joins
+them and refuses to write if the two copies disagree on a single score. All 13
+seasons 2012/13–2024/25 pass that audit. The verifier passes 2023/24 and
+2024/25 with 100% odds coverage and 0.0% closing-copied-from-opening.
+
+#### The regenerated result (fingerprint `c6c0bb194dcd9ba2`)
+| | in-sample | walk-forward |
+|---|---|---|
+| bets | 260 | 433 |
+| ROI | +603.26% | −82.60% |
+| yield (profit ÷ turnover) | +34.07% | −15.84% [−28.57%, −3.47%] |
+| CLV, probability points | — | −1.87% [−2.11%, −1.63%] |
+| of which margin paid | — | −1.89% |
+| of which market movement | — | +0.02% [−0.22%, +0.27%] |
+
+The old README figures (ROI −28.5%, 413 bets, CLV −0.67%) did not reproduce,
+and neither did the "measures disagree" example in methodology §6.3. Both are
+withdrawn rather than edited. The notice and `numbers.json` rule did exactly
+what they were built for.
+
+#### Bug 10: two yields under one name
+The same 433 bets printed **−15.84%** in the backtest report (profit ÷ turnover)
+and **−10.08% [−22.90%, +3.26%]** in the headline metrics (unweighted mean of
+profit/stake). The interval, and the verdict "includes zero, not distinguishable
+from no edge", belonged to the second number. On the right number the interval
+is [−28.57%, −3.47%], so **the loss is established**: the conclusion flipped.
+- `metrics.bootstrap_ratio_ci`: resamples whole bets and recomputes
+  Σprofit ÷ Σstake, keeping each bet's profit and stake together.
+- Mean return per bet stays in the report under its own name, with a note on
+  what the gap means: Kelly's bigger stakes did worse than its smaller ones.
+- Six regression tests, all failing on the old code. The existing summarise
+  test passed throughout because it only checked `lower < upper`, which is
+  true of either yield. A test that cannot tell two candidate answers apart
+  does not pin either.
+
+#### Bug 11: negative CLV blamed on the market
+The report said the model takes "prices the market later moves AWAY from".
+CLV in probability points charges the bookmaker's margin, so it splits exactly
+into margin paid + market movement (`clv.decompose_clv`). Decomposed, the
+movement is +0.02% with an interval straddling zero: the market never moved,
+and **the whole −1.87% is margin**. That is what a model with no information
+looks like.
+- The verdict is now chosen from the movement: none, toward, or away.
+- Found while writing the "toward" test: if the market moves toward the bet
+  by less than the margin, the odds ratio is *positive* and points *negative*.
+  The report used to blame every disagreement on the ratio's asymmetry, but
+  here the cause is the margin, and the report now says so.
+- The beat rate (34.4%) compares Bet365's price (5.4% margin) with Pinnacle's
+  close (2.9%). Below 50% partly measures that gap between the books, and the
+  report says so when movement is zero.
+- Five regression tests, all failing on the old code; `numbers.json` carries
+  the decomposition; three docs tests hold the README to it, including one
+  that fails if "every bit of the negative CLV is the margin" survives a rerun
+  that finds movement.
+
+#### Reproducibility, stated precisely
+Same fingerprint and pinned libraries, Windows vs Linux: identical bet count,
+ROI and CLV to two decimals, but turnover 5,214.99 vs 5,215.11. That comes from
+platform floating point inside L-BFGS-B, not non-determinism. `numbers.json` is
+generated on the author's machine; methodology §7.3 now states the claim
+precisely.
+
+#### Also
+- `make_charts.py`: yield interval, mean return per bet and the CLV
+  decomposition written to `numbers.json`; the chart description no longer
+  hard-codes "the 340-point swing" from the unverified run.
+- Calibration did not improve the model out of sample on real data (Platt
+  ECE 0.0578 → 0.0613; isotonic worse). The README says so.
+- A correction to 23 Oct's handoff: all six former skips were documentation
+  tests waiting on `numbers.json`.
+
+#### Next
+1. More seasons. Rebuild 2012/13–2024/25, run, and see how far the movement
+   interval tightens.
+2. Decompose the simulation study's CLV too, so the real and simulated
+   *movement* components can be compared like for like.
+3. Exploration notebook, then STUDY_GUIDE.md.
+
 
 ### 2026-10-23 — V8 gets a headline that needs no download
 football-data.co.uk is unreachable from this network — browser, PowerShell and

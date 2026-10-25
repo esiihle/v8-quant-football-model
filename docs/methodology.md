@@ -594,23 +594,59 @@ Three expressions, all reported:
 | **Probability points** | de-vigged closing prob − taken implied prob | **authoritative** for averaging |
 | **Beat rate** | share of bets where the price moved your way | robust, needs no averaging |
 
-**Probability points is authoritative, and the first real run showed why.** The
-odds ratio is asymmetric: a price halving scores −50% while a doubling scores
-+100%, so its mean is pulled upward by its own right tail. The walk-forward
-produced:
+**Probability points is authoritative**, because the odds ratio is asymmetric:
+a price halving scores −50% while a doubling scores +100%, so its mean is
+pulled upward by its own right tail. A handful of large price collapses can
+carry the ratio positive while most bets lose to the close. When the two
+measures' intervals exclude zero in opposite directions, the report flags it
+and never lets the flattering measure stand as the verdict
+(`test_disagreeing_clv_measures_are_flagged_not_papered_over`).
 
-```
-mean CLV (odds ratio)          +1.82%   [+0.81%, +3.00%]   positive
-mean CLV (probability points)  -0.67%   [-0.87%, -0.47%]   NEGATIVE
-beat the close                 47.46%   [42.62%, 52.30%]
-CLV distribution: worst -23.17% | median -0.33% | best +108.37%
-```
+> **Correction (25 Oct 2026).** This section previously illustrated the point
+> with a worked example (ratio +1.82%, points −0.67%) from a session whose
+> numbers were never reproduced from `data/raw/`. When the real 2023–25 run
+> was made, the two measures *agreed*, so the example is withdrawn. The
+> argument stands on the arithmetic alone. Real figures are in §6.5.
 
-Both intervals excluded zero, in **opposite directions**. The ratio was being
-carried by a single +108% price collapse while the model was in fact losing to
-the close, and the beat rate agreed with probability points. The report now
-flags disagreement explicitly and never lets the flattering measure stand as the
-verdict — `test_disagreeing_clv_measures_are_flagged_not_papered_over`.
+#### Decomposing CLV: margin paid and market movement *(added 25 Oct 2026)*
+
+Probability points compares the closing **fair** probability with the **raw**
+implied probability of the price taken, and the raw price includes the
+bookmaker's margin. So a bettor with no information at all, whose prices the
+market never moves against, still shows negative CLV equal to the margin. An
+identity separates the two:
+
+$$
+\underbrace{p^{\text{fair}}_{\text{close}} - p^{\text{raw}}_{\text{taken}}}_{\text{CLV points}}
+\;=\;
+\underbrace{\big(p^{\text{fair}}_{\text{open}} - p^{\text{raw}}_{\text{taken}}\big)}_{-\,\text{margin paid}}
+\;+\;
+\underbrace{\big(p^{\text{fair}}_{\text{close}} - p^{\text{fair}}_{\text{open}}\big)}_{\text{market movement}}
+$$
+
+Only the **movement** measures information: how far the market's fair view
+travelled toward the bet once it had heard everything. `clv.decompose_clv`
+reports both parts with intervals, and the report's verdict is chosen from the
+movement:
+
+| movement interval | verdict |
+|---|---|
+| excludes zero, positive | real information; whether it covers the margin decides profit |
+| includes zero | no detectable information: negative CLV is the margin alone |
+| excludes zero, negative | the market corrects *against* the model |
+
+The same decomposition explains a second trap. If the market does move toward
+the bets by less than the margin, the price shortens, so the **odds ratio is
+positive** while **probability points is negative**. The measures disagree, but
+not because of asymmetry. The ratio compares price with price, so the margin
+roughly cancels, while points charges it. The report now says which cause
+applies (`test_movement_that_does_not_cover_the_margin_is_named`).
+
+The beat rate has a related blind spot when the price taken and the close come
+from different books. On the EPL data, Bet365's margin is about 5.4% against
+Pinnacle's 2.9% (as `verify_raw_data.py` reports), so Bet365's price is shorter
+than Pinnacle's close even when the two books agree on the probability. A beat
+rate below 50% then measures the gap between the books, not the market moving.
 
 **CLV by claimed edge** is the sharpest diagnostic available. If the model has
 real information, the bets where it claimed the *most* edge should show the
@@ -626,8 +662,16 @@ entirely different claims, and a bare point estimate hides which one you have.
 Percentile bootstrap rather than a normal approximation, because bet-level
 returns are violently skewed — most bets lose a unit, a few win several.
 
-* **Yield** (per unit staked) and **ROI** (on bankroll) — different questions,
-  routinely confused.
+* **Yield** (profit ÷ turnover) and **ROI** (on bankroll) — different questions,
+  routinely confused. Yield is a *ratio of sums*, so it is a stake-weighted
+  average of per-bet returns, and its interval comes from
+  `metrics.bootstrap_ratio_ci`, which resamples whole bets (profit and stake
+  together) and recomputes the ratio. The unweighted mean of per-bet returns is
+  reported beside it as **mean return per bet**, a diagnostic. *(Corrected 25
+  Oct 2026: until then the headline "yield" was that unweighted mean, while the
+  backtest report printed profit ÷ turnover under the same name. On the EPL run
+  they were −10.08% and −15.84%; the gap is real information, since it means
+  Kelly's larger stakes did worse than its smaller ones.)*
 * **Maximum drawdown**, against the running peak, which is how a fall is
   experienced.
 * **Sharpe-like ratio**, named that on purpose: no risk-free rate is subtracted,
@@ -638,19 +682,28 @@ returns are violently skewed — most bets lose a unit, a few win several.
 
 ### 6.5 What the first honest run said
 
-Worth recording, because the contrast with the in-sample numbers is the whole
-point of the phase:
+*Regenerated 25 Oct 2026 from `data/raw/` (EPL 2023/24 and 2024/25, 760
+matches), run fingerprint `c6c0bb194dcd9ba2`. The authoritative copy of every
+figure is `docs/charts/numbers.json`. The table previously here came from an
+earlier session and was never reproduced, so it has been replaced, not
+amended.*
 
 | | Phase 5 (model fitted on everything) | Phase 6 (walk-forward) |
 |---|---|---|
-| ROI | +311% | **−28.5%** |
-| yield | +22.9% | **−4.2%** [−17.9%, +10.6%] |
+| bets | 260 | 433 |
+| ROI | +603.26% | **−82.60%** |
+| yield (profit ÷ turnover) | +34.07% | **−15.84%** [−28.57%, −3.47%] |
+| CLV, probability points | — | **−1.87%** [−2.11%, −1.63%] |
+| of which: margin paid | — | −1.89% |
+| of which: market movement | — | **+0.02%** [−0.22%, +0.27%] |
 
-The in-sample figure was an artefact of a model that had seen the matches it was
-betting on. The walk-forward figure is the forecast — and its interval includes
-zero, so even the loss is not statistically established on 413 bets. That is
-precisely the situation CLV exists for, and CLV says the model is not beating the
-close.
+The in-sample figure is an artefact of a model that had seen the matches it was
+betting on. The walk-forward figure is the forecast, and its yield interval
+excludes zero, so the loss is established. CLV says the model does not beat the
+close, and the decomposition says why: the market's movement after each bet is
+indistinguishable from zero, so the negative CLV is the margin and nothing else.
+Read against §8.6, this means no edge larger than about 5 probability points.
+It does not mean no edge.
 
 Reporting this rather than tuning until it looks better is the deliverable.
 
@@ -724,6 +777,19 @@ a reported ROI and a rerun disagree while the fingerprints match, the code is
 non-deterministic and that is a bug. If the fingerprints differ, the settings
 differed and the comparison was never valid. Either way the question is
 answerable, which it was not before.
+
+**What the fingerprint does not promise** *(added 25 Oct 2026)*. It fixes the
+*settings*, not the arithmetic underneath them. The same fingerprint on the
+same data, run on Windows and on Linux with identical pinned libraries, gave
+identical bet counts, ROI and CLV to two decimal places, but walk-forward
+turnover of 5,214.99 against 5,215.11. L-BFGS-B's result depends on the
+floating-point behaviour of the platform's maths library, and a difference in
+the eighth significant figure of one fitted parameter can nudge a Kelly stake
+by a cent. So the precise claim is: *same fingerprint, same environment ⇒ same
+numbers; same fingerprint across platforms ⇒ same numbers to reported
+precision*. `numbers.json` is therefore generated on one designated machine
+(the author's), and the documentation tests compare at the precision the
+documents quote.
 
 ### 7.4 What is deliberately *not* hardened
 
@@ -882,6 +948,17 @@ It also sets the bar for the project's own real-data run. If that run reports a
 CLV inside ±5 points, the honest reading is that the question is unresolved at
 this sample size — which is a more useful thing to be able to say than either
 "it works" or "it doesn't".
+
+*Applied 25 Oct 2026 (§6.5):* the real run's market movement was +0.02 points
+[−0.22, +0.27], well inside that band. The honest reading is the one written
+here in advance: no edge of detectable size on two seasons.
+
+One caution when comparing the two. The simulation's efficient book showed
+−1.59 points of CLV and the real run −1.87, and it is tempting to call them
+the same. Both are mostly margin, but the simulated book's margin is a setting
+in `simulation_study.py` while the real one is Bet365's. The like-for-like
+comparison is between the *movement* components, and the simulation does not
+yet report its CLV decomposed.
 
 #### A bug the study found in itself
 

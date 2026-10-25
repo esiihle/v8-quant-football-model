@@ -239,6 +239,8 @@ def clv_summary(bets, config=None):
         and ratio_verdict != points_verdict
     )
 
+    decomposition = decompose_clv(with_clv, n_resamples, confidence, seed)
+
     distribution = with_clv["clv_ratio"].dropna()
     return {
         "bets": int(len(with_clv)),
@@ -259,7 +261,69 @@ def clv_summary(bets, config=None):
         "ratio_verdict": ratio_verdict,
         "points_verdict": points_verdict,
         "measures_disagree": measures_disagree,
+        "decomposition": decomposition,
         "per_bet": with_clv,
+    }
+
+
+def decompose_clv(with_clv, n_resamples=2000, confidence=0.95, seed=42):
+    """Split CLV in probability points into the margin paid and the market's move.
+
+    Why [added 25 Oct 2026]
+    -----------------------
+    CLV in probability points compares the closing market's FAIR probability
+    with the RAW implied probability of the price taken - and the raw price
+    includes the bookmaker's margin. So even a bettor with no information at
+    all, whose prices the market never moves against, shows negative CLV equal
+    to the margin. An identity makes the two parts separable:
+
+        CLV points = fair_close - raw_taken
+                   = (fair_open - raw_taken)  +  (fair_close - fair_open)
+                   =     - margin paid        +     market movement
+
+    * margin paid      - what the price cost over its fair value. Not a
+                         judgement on the model; any bettor pays it.
+    * market movement  - how far the market's fair view moved TOWARD the bet
+                         between the bet and kick-off. This is the part that
+                         measures information. Zero means the market, having
+                         heard everything, saw nothing the model saw.
+
+    On the 2023-25 EPL run: CLV -1.87 points = margin -1.89 + movement +0.02
+    [-0.22, +0.28]. Every bit of the negative CLV was margin, and the old
+    verdict ("the market later moves AWAY from these prices") was not what the
+    data said.
+
+    Needs the ledger's `market_raw` and `market_fair` (the bet-into price, raw
+    and de-vigged, written by staking.find_value_bets). Returns None without
+    them rather than guessing.
+    """
+    needed = ("clv_probability_points", "market_raw", "market_fair")
+    if not all(column in with_clv.columns for column in needed):
+        return None
+
+    points = with_clv["clv_probability_points"].astype(float)
+    margin_paid = (with_clv["market_fair"] - with_clv["market_raw"]).astype(float)
+    movement = points - margin_paid           # = fair_close - fair_open, exactly
+
+    usable = points.notna() & margin_paid.notna()
+    if usable.sum() < 2:
+        return None
+
+    margin_ci = bootstrap_interval(margin_paid[usable], np.mean, n_resamples,
+                                   confidence, seed)
+    movement_ci = bootstrap_interval(movement[usable], np.mean, n_resamples,
+                                     confidence, seed)
+
+    if movement_ci["lower"] > 0:
+        movement_verdict = "toward"           # the market came to agree
+    elif movement_ci["upper"] < 0:
+        movement_verdict = "away"             # the market came to disagree
+    else:
+        movement_verdict = "none"             # no detectable information
+    return {
+        "margin_paid": margin_ci,
+        "market_movement": movement_ci,
+        "movement_verdict": movement_verdict,
     }
 
 
@@ -330,6 +394,15 @@ def clv_report(summary, band_table=None):
                               summary["clv_probability_points"]))
     lines.append(interval("beat the close", summary["beat_rate"], as_percent=False))
 
+    parts = summary.get("decomposition")
+    if parts:
+        lines.append("")
+        lines.append("  Where the probability-points CLV comes from:")
+        lines.append(interval("  margin paid on the price taken", parts["margin_paid"]))
+        lines.append(interval("  market movement after the bet", parts["market_movement"]))
+        lines.append("    (CLV = margin paid + market movement. The margin is paid by")
+        lines.append("     every bettor; only the movement measures information.)")
+
     distribution = summary["distribution"]
     lines.append("")
     lines.append("  CLV distribution (odds ratio):")
@@ -341,6 +414,7 @@ def clv_report(summary, band_table=None):
 
     lines.append("")
     headline = summary["headline_measure"]
+    parts = summary.get("decomposition")
 
     if summary.get("measures_disagree"):
         lines.append("  THE TWO CLV MEASURES DISAGREE, and that is itself the "
@@ -348,15 +422,29 @@ def clv_report(summary, band_table=None):
         lines.append(f"    odds ratio:         {summary['ratio_verdict']}")
         lines.append(f"    probability points: {summary['points_verdict']}")
         lines.append("")
-        lines.append("  Probability points is authoritative. The odds ratio is "
-                     "ASYMMETRIC — a price")
-        lines.append("  halving scores -50% while a doubling scores +100% — so "
-                     "its mean is pulled")
-        lines.append("  upward by its own right tail. Check the distribution "
-                     "above: if the best")
-        lines.append("  bet dwarfs the worst, the ratio mean is being carried "
-                     "by a handful of")
-        lines.append("  price moves and is not describing the typical bet.")
+        lines.append("  Probability points is authoritative.")
+        if parts and parts["movement_verdict"] == "toward":
+            # Added 25 Oct 2026. The ratio compares the price taken with the
+            # closing PRICE, so the margin is in both and roughly cancels; the
+            # points measure compares it with the closing FAIR probability, so
+            # the margin is charged. A positive ratio beside negative points is
+            # then the margin, not the ratio's asymmetry.
+            lines.append("  Here the disagreement is the MARGIN: the market did "
+                         "move toward these")
+            lines.append("  bets, so the price shortened and the odds ratio is "
+                         "positive - but by less")
+            lines.append("  than the margin paid, which only probability points "
+                         "charges.")
+        else:
+            lines.append("  The odds ratio is ASYMMETRIC — a price halving "
+                         "scores -50% while a")
+            lines.append("  doubling scores +100% — so its mean is pulled upward "
+                         "by its own right")
+            lines.append("  tail. Check the distribution above: if the best bet "
+                         "dwarfs the worst, the")
+            lines.append("  ratio mean is being carried by a handful of price "
+                         "moves and is not")
+            lines.append("  describing the typical bet.")
         lines.append("")
         lines.append("  The beat rate is the tie-breaker, and it needs no "
                      "averaging at all.")
@@ -373,10 +461,28 @@ def clv_report(summary, band_table=None):
             and summary["ratio_verdict"] == "negative"):
         lines.append(f"  CLV is NEGATIVE on {headline}, and the interval "
                      "excludes zero.")
-        lines.append("  The model is taking prices the market later moves AWAY "
-                     "from, so there is")
-        lines.append("  no edge — whatever the ROI happens to say in either "
-                     "direction.")
+        # Say WHY, from the decomposition, rather than assume the worst-sounding
+        # reason. Until 25 Oct 2026 this always claimed the market moved away,
+        # which the 2023-25 EPL run showed was false: the movement was zero and
+        # the whole negative figure was the margin.
+        verdict = (parts or {}).get("movement_verdict")
+        if verdict == "none":
+            lines.append("  All of it is the margin: after the bet, the market "
+                         "moved neither toward")
+            lines.append("  nor away from these prices. That is what a model with "
+                         "no information")
+            lines.append("  looks like - it pays the margin and finds nothing to "
+                         "recover it with.")
+        elif verdict == "toward":
+            lines.append("  The market DID move toward these bets, but by less "
+                         "than the margin paid:")
+            lines.append("  real information, not enough of it to beat the "
+                         "price.")
+        else:
+            lines.append("  The model is taking prices the market later moves "
+                         "AWAY from, so there is")
+            lines.append("  no edge — whatever the ROI happens to say in either "
+                         "direction.")
 
     else:
         lines.append(f"  CLV on {headline} is NOT distinguishable from zero: "
@@ -394,9 +500,20 @@ def clv_report(summary, band_table=None):
                          "the interval clear of it.")
         elif beat["upper"] < 0.5:
             lines.append(f"  Beat rate {beat['estimate']:.1%} is BELOW 50% with "
-                         "the interval clear of it:")
-            lines.append("  the price moves against these bets more often than "
-                         "for them.")
+                         "the interval clear of it.")
+            if parts and parts["movement_verdict"] == "none":
+                # Added 25 Oct 2026. The beat rate compares raw prices, so it
+                # absorbs any margin gap between the book bet into and the
+                # closing book (Bet365 ~5.4% vs Pinnacle ~2.9% on the EPL
+                # data). With zero movement, that gap is what it is measuring.
+                lines.append("  Not because the market moved - the decomposition "
+                             "shows it did not. The")
+                lines.append("  price taken carries more margin than the closing "
+                             "price, so it is shorter")
+                lines.append("  even when both books agree on the probability.")
+            else:
+                lines.append("  the price moves against these bets more often "
+                             "than for them.")
         else:
             lines.append(f"  Beat rate {beat['estimate']:.1%} is not "
                          "distinguishable from a coin flip.")

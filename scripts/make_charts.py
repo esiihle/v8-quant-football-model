@@ -65,7 +65,7 @@ CHART_PURPOSE = {
                         "with the bootstrap interval on the mean",
     "reliability": "out-of-sample predicted vs realised probability",
     "bankroll": "the walk-forward bankroll curve with drawdown from peak",
-    "honesty": "in-sample vs walk-forward ROI and yield — the 340-point swing",
+    "honesty": "in-sample vs walk-forward ROI and yield — what the test boundary costs",
     "clv_by_edge": "does the model's own claimed edge predict CLV?",
 }
 
@@ -607,6 +607,15 @@ def gather(config, use_sample, verbose=False):
             numbers["starting_bankroll"] = walk_summary["starting_bankroll"]
             numbers["windows"] = int(len(walk["windows"]))
 
+            # The yield's bootstrap interval [added 25 Oct 2026]. Taken from
+            # metrics.summarise, whose yield is now profit / turnover - the
+            # same definition as walk_forward_yield above, so the estimate and
+            # its interval describe one number.
+            headline = metrics.summarise(walk_ledger, walk_summary, config)
+            numbers["walk_forward_yield_low"] = headline["yield"]["lower"]
+            numbers["walk_forward_yield_high"] = headline["yield"]["upper"]
+            numbers["mean_return_per_bet"] = headline["mean_return_per_bet"]["estimate"]
+
             clv_summary = clv.clv_summary(bet_history, config)
             points = clv_summary["clv_probability_points"]
             numbers["clv_points_mean"] = points["estimate"]
@@ -618,6 +627,17 @@ def gather(config, use_sample, verbose=False):
             numbers["beat_rate"] = clv_summary["beat_rate"]["estimate"]
             numbers["clv_headline"] = clv_summary["headline_measure"]
             numbers["clv_measures_disagree"] = bool(clv_summary["measures_disagree"])
+
+            # CLV = margin paid + market movement [added 25 Oct 2026]. The
+            # movement is the part that measures information; see
+            # clv.decompose_clv for the identity.
+            parts = clv_summary.get("decomposition")
+            if parts:
+                numbers["clv_margin_paid"] = parts["margin_paid"]["estimate"]
+                numbers["clv_movement_mean"] = parts["market_movement"]["estimate"]
+                numbers["clv_movement_low"] = parts["market_movement"]["lower"]
+                numbers["clv_movement_high"] = parts["market_movement"]["upper"]
+                numbers["clv_movement_verdict"] = parts["movement_verdict"]
             try:
                 clv_bands = clv.clv_by_band(bet_history, config=config)
             except Exception as error:          # banding needs spread in `edge`

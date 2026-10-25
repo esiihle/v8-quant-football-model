@@ -423,6 +423,113 @@ def test_summarise_reports_intervals_and_a_verdict(config):
     assert ("excludes zero" in report) or ("INCLUDES ZERO" in report)
 
 
+def make_ledger(stakes, odds, won, start="2024-01-06"):
+    """A hand-built ledger, so these tests can never skip for lack of bets.
+
+    Columns are the ones `summarise` reads. Profit follows the payout rule:
+    a win returns stake * (odds - 1), a loss costs the stake.
+    """
+    stakes = np.asarray(stakes, dtype=float)
+    odds = np.asarray(odds, dtype=float)
+    won = np.asarray(won, dtype=bool)
+    profit = np.where(won, stakes * (odds - 1), -stakes)
+    return pd.DataFrame({
+        "MatchDate": pd.date_range(start, periods=len(stakes), freq="D"),
+        "stake": stakes,
+        "odds": odds,
+        "won": won,
+        "profit": profit,
+        "bankroll_after_day": 1000 + np.cumsum(profit),
+    })
+
+
+def test_headline_yield_is_profit_over_turnover_not_the_mean_return(config):
+    """Regression, 25 Oct 2026: one name, two numbers.
+
+    The first real-data run printed, for the SAME 433 bets,
+        backtest report:   yield (on turnover)       -15.84%
+        headline metrics:  yield (per unit staked)   -10.08%   [interval]
+    The backtest divided total profit by total stake; the headline averaged
+    each bet's profit/stake, giving a 10-unit bet and a 1-unit bet equal say.
+    Both are legitimate numbers, but only the first is a yield, and the
+    confidence interval was attached to the other one.
+
+    The ledger below is built so the two definitions cannot agree: the big
+    stake loses and the small stake wins.
+    """
+    ledger = make_ledger(stakes=[10, 1, 10, 1], odds=[2.0, 3.0, 2.0, 3.0],
+                         won=[False, True, False, True])
+    summary = metrics.summarise(ledger, None, config)
+
+    by_turnover = ledger["profit"].sum() / ledger["stake"].sum()    # -16/22
+    mean_return = (ledger["profit"] / ledger["stake"]).mean()       # +0.50
+
+    assert summary["yield"]["estimate"] == pytest.approx(by_turnover)
+    assert summary["mean_return_per_bet"]["estimate"] == pytest.approx(mean_return)
+    assert by_turnover < 0 < mean_return          # the case that exposed it
+
+
+def test_headline_yield_matches_the_bankroll_simulation(config):
+    """The same ledger must give the same yield in every report that prints one."""
+    history = make_history(120, seed=12, model_edge=0.05)
+    bets = backtest.walk_forward(history, config)["bets"]
+    if bets.empty:
+        # Fall back to a hand-built ledger rather than skipping: this property
+        # matters too much to be silently untested.
+        ledger = make_ledger([5, 20, 8, 12, 3], [2.1, 3.4, 1.9, 4.0, 2.6],
+                             [True, False, True, False, True])
+        expected = ledger["profit"].sum() / ledger["stake"].sum()
+    else:
+        ledger, bankroll = staking.simulate_bankroll(bets, config)
+        expected = bankroll["yield"]
+    summary = metrics.summarise(ledger, None, config)
+    assert summary["yield"]["estimate"] == pytest.approx(expected)
+
+
+def test_ratio_bootstrap_keeps_each_bets_profit_and_stake_together():
+    """Resampling must draw whole bets. If profit and stake were resampled
+    independently, a ledger where every bet returns exactly -50% would produce
+    resamples that are not -50% - an interval with width where none exists."""
+    stakes = np.array([1.0, 7.0, 3.0, 20.0, 0.5])
+    profit = -0.5 * stakes
+    ci = metrics.bootstrap_ratio_ci(profit, stakes, n_resamples=500)
+    assert ci["estimate"] == pytest.approx(-0.5)
+    assert ci["lower"] == pytest.approx(-0.5)
+    assert ci["upper"] == pytest.approx(-0.5)
+
+
+def test_ratio_bootstrap_interval_brackets_and_narrows():
+    """The interval contains the estimate and tightens with more bets."""
+    rng = np.random.default_rng(3)
+
+    def width(n):
+        stakes = rng.uniform(1, 10, n)
+        won = rng.random(n) < 0.35
+        profit = np.where(won, stakes * 2.0, -stakes)
+        ci = metrics.bootstrap_ratio_ci(profit, stakes, n_resamples=800)
+        assert ci["lower"] <= ci["estimate"] <= ci["upper"]
+        return ci["upper"] - ci["lower"]
+
+    assert width(2000) < width(100)
+
+
+def test_ratio_bootstrap_degrades_cleanly():
+    empty = metrics.bootstrap_ratio_ci([], [])
+    assert empty["n"] == 0 and np.isnan(empty["estimate"])
+    single = metrics.bootstrap_ratio_ci([-2.0], [4.0])
+    assert single["estimate"] == single["lower"] == single["upper"] == -0.5
+
+
+def test_metrics_report_labels_both_measures(config):
+    ledger = make_ledger([10, 1, 10, 1], [2.0, 3.0, 2.0, 3.0],
+                         [False, True, False, True])
+    report = metrics.metrics_report(metrics.summarise(ledger, None, config))
+    assert "yield (profit / turnover)" in report
+    assert "mean return per bet" in report
+    # The old ambiguous label must not come back.
+    assert "per unit staked" not in report
+
+
 def test_summarise_handles_no_bets(config):
     summary = metrics.summarise(pd.DataFrame(), None, config)
     assert summary["bets"] == 0
@@ -578,3 +685,121 @@ def test_clv_bands_report_the_authoritative_measure():
     assert columns.index("mean_clv_points") < columns.index("mean_clv_ratio")
     assert len(table) == 4
     assert table["bets"].sum() == n
+
+
+# --- Added 25 Oct 2026: where negative CLV comes from -----------------------
+
+def make_bets_with_known_movement(n, move, margin=0.05, seed=0):
+    """Bets where the margin paid and the market's movement are known exactly.
+
+    Each bet is on the home win. The OPENING book prices the home win at a fair
+    probability p, loaded by `margin`, so the price taken is 1 / (p * (1+margin)):
+        market_fair = p                   (what staking would record)
+        market_raw  = p * (1 + margin)    (what the price implies)
+    The CLOSING market's fair home probability is p + move. Both books are
+    loaded proportionally, so de-vigging with the proportional method recovers
+    the fair probabilities exactly and the test checks arithmetic, not noise.
+    """
+    rng = np.random.default_rng(seed)
+    p_open = rng.uniform(0.30, 0.60, n)
+    p_close = p_open + move
+    draw_share = rng.uniform(0.4, 0.6, n)
+    closing = np.column_stack([p_close,
+                               (1 - p_close) * draw_share,
+                               (1 - p_close) * (1 - draw_share)])
+    closing_odds = 1.0 / (closing * (1 + margin))
+    taken_odds = 1.0 / (p_open * (1 + margin))
+    return pd.DataFrame({
+        "odds": taken_odds,
+        "outcome": "home_win",
+        "market_raw": 1.0 / taken_odds,
+        "market_fair": p_open,
+        "closing_odds": closing_odds[:, 0],
+        "closing_home": closing_odds[:, 0],
+        "closing_draw": closing_odds[:, 1],
+        "closing_away": closing_odds[:, 2],
+    })
+
+
+@pytest.fixture
+def proportional_config(config):
+    """Proportional de-vig, so the fixtures above are recovered exactly."""
+    adjusted = {**config, "staking": {**config.get("staking", {}),
+                                      "devig_method": "proportional"}}
+    return adjusted
+
+
+def test_clv_is_exactly_margin_plus_movement(proportional_config):
+    """The decomposition is an identity, not an approximation: per bet,
+    CLV points = -(market_raw - market_fair) + (fair_close - fair_open)."""
+    bets = make_bets_with_known_movement(300, move=0.01, seed=1)
+    summary = clv.clv_summary(bets, proportional_config)
+    parts = summary["decomposition"]
+    total = summary["clv_probability_points"]["estimate"]
+    assert (parts["margin_paid"]["estimate"]
+            + parts["market_movement"]["estimate"]) == pytest.approx(total, abs=1e-12)
+    assert parts["market_movement"]["estimate"] == pytest.approx(0.01, abs=1e-9)
+
+
+def test_a_bettor_with_no_information_shows_negative_clv_equal_to_the_margin(
+        proportional_config):
+    """Regression, 25 Oct 2026: negative CLV was blamed on the market.
+
+    On the 2023-25 EPL walk-forward, CLV was -1.87 points and the report said
+    the market "later moves AWAY from" the model's prices. Decomposed, the
+    margin paid was -1.89 and the market's movement +0.02 [-0.22, +0.28]: the
+    market did not move at all, and the whole figure was the bookmaker's cut.
+
+    Here the closing market equals the opening one (move = 0). CLV must still
+    be clearly negative - the margin is real - and the report must attribute it
+    to the margin, not to the market.
+    """
+    bets = make_bets_with_known_movement(400, move=0.0, seed=2)
+    summary = clv.clv_summary(bets, proportional_config)
+    report = clv.clv_report(summary)
+
+    assert summary["points_verdict"] == "negative"
+    assert summary["decomposition"]["movement_verdict"] == "none"
+    assert "All of it is the margin" in report
+    assert "moves AWAY" not in report
+    # The beat rate is 0% here (taken price == closing price, never better),
+    # and must not be read as the market moving against the bets either.
+    assert "price moves against these bets" not in report
+    assert "Not because the market moved" in report
+
+
+def test_movement_that_does_not_cover_the_margin_is_named(proportional_config):
+    """Real information, too little of it: the market moves toward the bets by
+    one point while a 5% book costs about two.
+
+    Found while writing this test: the price shortens, so the odds ratio is
+    POSITIVE while probability points is NEGATIVE - the measures disagree. The
+    report used to explain every disagreement by the ratio's asymmetry. Here
+    the cause is the margin (charged by points, roughly cancelled in the
+    ratio), and the report must say so.
+    """
+    bets = make_bets_with_known_movement(400, move=0.01, seed=3)
+    summary = clv.clv_summary(bets, proportional_config)
+    report = clv.clv_report(summary)
+    assert summary["points_verdict"] == "negative"
+    assert summary["ratio_verdict"] == "positive"
+    assert summary["decomposition"]["movement_verdict"] == "toward"
+    assert "the disagreement is the MARGIN" in report
+    assert "ASYMMETRIC" not in report
+
+
+def test_movement_against_the_bets_is_still_called_away(proportional_config):
+    bets = make_bets_with_known_movement(400, move=-0.02, seed=4)
+    summary = clv.clv_summary(bets, proportional_config)
+    assert summary["decomposition"]["movement_verdict"] == "away"
+    assert "moves AWAY" in clv.clv_report(summary)
+
+
+def test_decomposition_is_absent_rather_than_guessed(config):
+    """Without the bet-into market columns there is nothing to decompose, and
+    the report must still render."""
+    bets = make_bets_with_closing_market(200, np.full(200, 0.40),
+                                         np.full(200, 0.34), seed=5)
+    summary = clv.clv_summary(bets, config)
+    assert summary["decomposition"] is None
+    assert "NEGATIVE" in clv.clv_report(summary)

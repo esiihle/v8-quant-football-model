@@ -188,6 +188,56 @@ def bootstrap_ci(values, statistic=np.mean, n_resamples=2000, confidence=0.95,
     }
 
 
+def bootstrap_ratio_ci(numerator, denominator, n_resamples=2000,
+                       confidence=0.95, seed=42):
+    """Percentile bootstrap interval for a RATIO of sums: sum(num) / sum(den).
+
+    Why a separate function [added 25 Oct 2026]
+    -------------------------------------------
+    Yield is profit / turnover = sum(profit) / sum(stake). That is a
+    stake-WEIGHTED average of each bet's return, and it is NOT the same number
+    as the plain mean of profit/stake:
+
+        bet A: stake 10, loses   -> return -100%
+        bet B: stake  1, wins at 3.0 -> return +200%
+        plain mean of returns   = (-100% + 200%) / 2  = +50%
+        profit / turnover       = (-10 + 2) / 11      = -72.7%
+
+    The bankroll experienced -72.7%. Kelly stakes more where the model claims
+    more edge, so on a real ledger the two differ whenever the big-edge bets
+    behave differently from the small ones - on the 2023-25 EPL run by almost
+    six points (-15.84% vs -10.08%).
+
+    To bootstrap a ratio of sums, resample whole BETS - the profit and the stake
+    of a bet travel together - and recompute the ratio on each resample.
+    Resampling the two columns independently would break the pairing and give
+    an interval for a quantity nobody bet.
+    """
+    num = np.asarray(numerator, dtype=float)
+    den = np.asarray(denominator, dtype=float)
+    keep = np.isfinite(num) & np.isfinite(den)
+    num, den = num[keep], den[keep]
+
+    if len(num) == 0 or den.sum() == 0:
+        return {"estimate": np.nan, "lower": np.nan, "upper": np.nan, "n": 0}
+    estimate = float(num.sum() / den.sum())
+    if len(num) == 1:
+        return {"estimate": estimate, "lower": estimate, "upper": estimate, "n": 1}
+
+    rng = np.random.default_rng(seed)
+    draws = np.empty(n_resamples)
+    for i in range(n_resamples):
+        idx = rng.integers(0, len(num), len(num))   # one index -> both columns
+        draws[i] = num[idx].sum() / den[idx].sum()
+    tail = (1 - confidence) / 2
+    return {
+        "estimate": estimate,
+        "lower": float(np.quantile(draws, tail)),
+        "upper": float(np.quantile(draws, 1 - tail)),
+        "n": int(len(num)),
+    }
+
+
 def max_drawdown(bankroll_curve):
     """Largest peak-to-trough fall, as a share of the running peak.
 
@@ -271,8 +321,14 @@ def summarise(ledger, summary=None, config=None):
     if ledger is None or len(ledger) == 0:
         return {"bets": 0, "note": "no bets placed, so there is nothing to report"}
 
-    # Per-bet return on stake: the unit the bootstrap resamples.
+    # Per-bet return on stake. Its plain mean is a DIAGNOSTIC (how the average
+    # bet did, ignoring size); it is not the yield. See bootstrap_ratio_ci.
     returns = (ledger["profit"] / ledger["stake"].replace(0, np.nan)).to_numpy()
+
+    # The yield: profit / turnover, the same definition staking.py and
+    # backtest.py print, so one name never stands for two numbers.
+    yield_ci = bootstrap_ratio_ci(ledger["profit"], ledger["stake"],
+                                  n_resamples, confidence, seed)
 
     curve = ledger["bankroll_after_day"].to_numpy(dtype=float)
     weekly = (ledger.set_index("MatchDate")["profit"].resample("W").sum()
@@ -281,7 +337,9 @@ def summarise(ledger, summary=None, config=None):
 
     return {
         "bets": int(len(ledger)),
-        "yield": bootstrap_ci(returns, np.mean, n_resamples, confidence, seed),
+        "yield": yield_ci,
+        "mean_return_per_bet": bootstrap_ci(returns, np.mean, n_resamples,
+                                            confidence, seed),
         "hit_rate": bootstrap_ci(ledger["won"].astype(float), np.mean,
                                  n_resamples, confidence, seed),
         "average_odds": float(ledger["odds"].mean()),
@@ -293,9 +351,7 @@ def summarise(ledger, summary=None, config=None):
                        else float("nan"),
         "confidence_level": confidence,
         # The verdict that matters: does the yield interval exclude zero?
-        "yield_significant": bool(
-            bootstrap_ci(returns, np.mean, n_resamples, confidence,
-                         seed)["lower"] > 0),
+        "yield_significant": bool(yield_ci["lower"] > 0),
     }
 
 
@@ -313,8 +369,11 @@ def metrics_report(summary, band_table=None):
 
     lines.append("")
     lines.append(f"  With {confidence:.0%} bootstrap intervals:")
-    for label, key, as_signed in (("yield (per unit staked)", "yield", True),
-                                  ("hit rate", "hit_rate", False)):
+    rows = [("yield (profit / turnover)", "yield", True),
+            ("hit rate", "hit_rate", False)]
+    if "mean_return_per_bet" in summary:
+        rows.append(("mean return per bet", "mean_return_per_bet", True))
+    for label, key, as_signed in rows:
         stats = summary[key]
         if as_signed:
             lines.append(f"    {label:<28} {stats['estimate']:>+9.2%}"
@@ -322,6 +381,11 @@ def metrics_report(summary, band_table=None):
         else:
             lines.append(f"    {label:<28} {stats['estimate']:>10.2%}"
                          f"   [{stats['lower']:.2%}, {stats['upper']:.2%}]")
+
+    if "mean_return_per_bet" in summary:
+        lines.append("    (yield weights each bet by its stake - it is what the bankroll")
+        lines.append("     experienced. Mean return per bet weights every bet equally;")
+        lines.append("     a gap between them means stake size and outcome are related.)")
 
     lines.append("")
     lines.append(f"  {'ROI (on bankroll)':<30} {summary['roi']:>+10.2%}")

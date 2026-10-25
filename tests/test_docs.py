@@ -198,6 +198,35 @@ def test_readme_quotes_the_clv_verdict(readme, numbers):
         assert_quoted(readme, numbers[key], label)
 
 
+def test_readme_quotes_the_yield_interval(readme, numbers):
+    """Added 25 Oct 2026. The yield's interval decides whether the loss is
+    established, and the README once quoted the interval of a different
+    number (the unweighted mean return). Both ends must match numbers.json."""
+    for key, label in (("walk_forward_yield_low", "the yield interval's lower bound"),
+                       ("walk_forward_yield_high", "the yield interval's upper bound")):
+        assert_quoted(readme, numbers[key], label)
+
+
+def test_readme_quotes_the_clv_decomposition(readme, numbers):
+    """Added 25 Oct 2026. The README's central claim - that the negative CLV
+    is all margin and the market did not move - rests on these four figures."""
+    for key, label in (("clv_margin_paid", "the margin paid"),
+                       ("clv_movement_mean", "the market movement"),
+                       ("clv_movement_low", "the movement interval's lower bound"),
+                       ("clv_movement_high", "the movement interval's upper bound")):
+        assert_quoted(readme, numbers[key], label)
+
+
+def test_readme_claims_no_movement_only_when_the_data_says_so(readme, numbers):
+    """The prose verdict must follow the generated verdict, not outlive it.
+    If a rerun on more seasons finds movement, 'all of it is the margin'
+    becomes false and this test says so."""
+    claims_none = "every bit of the negative clv is the margin" in readme.lower()
+    assert claims_none == (numbers.get("clv_movement_verdict") == "none"), (
+        "the README's CLV verdict does not match numbers.json's "
+        f"clv_movement_verdict ({numbers.get('clv_movement_verdict')})")
+
+
 def test_readme_quotes_the_bet_count(readme, numbers):
     assert str(numbers["walk_forward_bets"]) in readme, (
         f"the README should say how many bets the walk-forward run placed "
