@@ -38,3 +38,7 @@ data/processed/*
 logs/
 *.pkl
 *.joblib
+
+# --- Local mirror clones and run logs (never committed) ---
+mirror-*/
+real_run_*.txt
