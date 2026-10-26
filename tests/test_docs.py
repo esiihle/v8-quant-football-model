@@ -494,3 +494,36 @@ def test_the_simulation_study_is_labelled_as_simulated_in_the_readme(readme):
         "the README must state explicitly that the simulation makes no claim "
         "about real betting markets"
     )
+
+
+
+# --- Added 26 Oct 2026: the simulation table is held to its JSON too ---------
+
+SIMULATION = REPO_ROOT / "docs" / "charts" / "simulation_study.json"
+CALIBRATION = REPO_ROOT / "docs" / "charts" / "simulation_calibration.json"
+
+
+def test_readme_quotes_the_simulation_study_as_recorded(readme):
+    """The README's simulation table had no test until 26 Oct 2026, so the
+    rule "no figure a command cannot regenerate" covered the real numbers and
+    not the simulated ones. When the simulator was recalibrated, every figure
+    in that table changed. This makes the next change impossible to miss."""
+    if not SIMULATION.exists():
+        pytest.skip("simulation_study.json is absent")
+    study = json.loads(SIMULATION.read_text())
+    arms = [level for level in study["levels"] if level.get("bets", 0)]
+    arms.append(study["noise_control"])
+    for arm in arms:
+        name = f"arm with mispricing {arm.get('mispricing_points', 'control')}"
+        for key in ("clv_points", "clv_low", "clv_high", "margin_paid", "movement"):
+            assert_quoted(readme, arm[key], f"{name}: {key}")
+
+
+def test_readme_quotes_the_simulator_calibration(readme):
+    if not CALIBRATION.exists():
+        pytest.skip("simulation_calibration.json is absent")
+    calibration = json.loads(CALIBRATION.read_text())
+    target = calibration["real_target"]
+    for key in ("estimate", "lower", "upper"):
+        assert_quoted(readme, target[key], f"the real calibration target ({key})")
+    assert_quoted(readme, calibration["closest_share"], "the calibrated share")

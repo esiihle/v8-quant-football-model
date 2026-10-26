@@ -1,0 +1,118 @@
+{
+  "statistic": "mean de-vigged market movement on the longest 25% of opening prices, no model",
+  "real_files": [
+    "E0_1213.csv",
+    "E0_1314.csv",
+    "E0_1415.csv",
+    "E0_1516.csv",
+    "E0_1617.csv",
+    "E0_1718.csv",
+    "E0_1819.csv",
+    "E0_1920.csv",
+    "E0_2021.csv",
+    "E0_2122.csv",
+    "E0_2223.csv",
+    "E0_2324.csv",
+    "E0_2425.csv"
+  ],
+  "real_matches": 4940,
+  "real_target": {
+    "estimate": 0.0011812359367928732,
+    "lower": 0.0006358364762431054,
+    "upper": 0.0017315602927559072,
+    "n": 3941
+  },
+  "simulated_seasons_per_point": 6,
+  "seed": 20261023,
+  "grid": [
+    {
+      "share": 0.0,
+      "estimate": 8.259669454041642e-05,
+      "lower": -0.00013259743940462578,
+      "upper": 0.0003033753185877439,
+      "n": 1710,
+      "inside_target_interval": false
+    },
+    {
+      "share": 0.1,
+      "estimate": 0.0003717828340510693,
+      "lower": 0.00015023166472666352,
+      "upper": 0.000598474022374598,
+      "n": 1710,
+      "inside_target_interval": false
+    },
+    {
+      "share": 0.2,
+      "estimate": 0.0006631511468944397,
+      "lower": 0.0004270605709833704,
+      "upper": 0.0009130153381171238,
+      "n": 1710,
+      "inside_target_interval": true
+    },
+    {
+      "share": 0.3,
+      "estimate": 0.0009654557059839516,
+      "lower": 0.0007107964291147174,
+      "upper": 0.0012412364356129749,
+      "n": 1710,
+      "inside_target_interval": true
+    },
+    {
+      "share": 0.4,
+      "estimate": 0.0012679092380516136,
+      "lower": 0.000991259116502272,
+      "upper": 0.0015805391124047192,
+      "n": 1710,
+      "inside_target_interval": true
+    },
+    {
+      "share": 0.5,
+      "estimate": 0.0015808822879514147,
+      "lower": 0.0012723083452256426,
+      "upper": 0.001942310100005982,
+      "n": 1710,
+      "inside_target_interval": true
+    },
+    {
+      "share": 0.6,
+      "estimate": 0.0018984139897595814,
+      "lower": 0.0015502914246991446,
+      "upper": 0.0023005003768983914,
+      "n": 1710,
+      "inside_target_interval": false
+    },
+    {
+      "share": 0.7,
+      "estimate": 0.002224690822608531,
+      "lower": 0.0018347974466164565,
+      "upper": 0.002669025042375441,
+      "n": 1710,
+      "inside_target_interval": false
+    },
+    {
+      "share": 0.8,
+      "estimate": 0.0025514725644830935,
+      "lower": 0.0021227100012703847,
+      "upper": 0.0030424842600932905,
+      "n": 1710,
+      "inside_target_interval": false
+    },
+    {
+      "share": 0.9,
+      "estimate": 0.0028898122178496292,
+      "lower": 0.0024180223903541038,
+      "upper": 0.0034290431668127885,
+      "n": 1710,
+      "inside_target_interval": false
+    },
+    {
+      "share": 1.0,
+      "estimate": 0.00323312122801257,
+      "lower": 0.002709489621235303,
+      "upper": 0.00382926915407691,
+      "n": 1710,
+      "inside_target_interval": false
+    }
+  ],
+  "closest_share": 0.4
+}

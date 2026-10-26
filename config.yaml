@@ -167,3 +167,17 @@ backtest:
 
 logging:
   level: INFO
+
+# --- Simulation study (added 26 Oct 2026) -------------------------------------
+# Not part of the run fingerprint: these settings shape the SIMULATED markets
+# that validate the backtester, not the real-data result.
+simulation:
+  # The real seasons the simulator is calibrated against (simulation_study.py
+  # --calibrate). Deliberately wider than data.seasons above: the calibration
+  # statistic needs no model, so it can use every season with closing odds,
+  # and more seasons make the target interval tighter (2 seasons: +/-0.14
+  # points; 13 seasons: +/-0.06). Rebuild them with
+  #   python scripts/rebuild_raw_from_mirrors.py --odds ../mirror-odds
+  #       --shots ../mirror-shots --seasons <these codes>
+  calibration_seasons: ["1213", "1314", "1415", "1516", "1617", "1718", "1819",
+                        "1920", "2021", "2122", "2223", "2324", "2425"]

@@ -7,10 +7,11 @@
 **Current phase:** Complete. Real-data figures **regenerated and verified** 25 Oct
 2026 from rebuilt EPL 2023/24–2024/25 files; every figure in README and
 methodology is checked against `docs/charts/numbers.json` by `tests/test_docs.py`.
-**Overall status:** 🟢 Every stage built and run on real data; **208 tests, 0
+**Overall status:** 🟢 Every stage built and run on real data; **217 tests, 0
 skipped** with data present; CI runs the suite and a full pipeline run on two
 Python versions; every run prints a reproducibility fingerprint.
-**Next action:** Extend to more seasons (the mirrors carry Pinnacle closing odds
+**Next action:** Cap negligible-weight history in the fit so 13 seasons run in
+reasonable time (see 26 Oct), then extend to more seasons (the mirrors carry Pinnacle closing odds
 back to 2012/13) to shrink the detection threshold, then run the exploration
 notebook and fill in its findings table (carried over from 1 Oct).
 **Schedule:** baselined from 28 Sep 2026; target presentation **18 Dec 2026**.
@@ -57,6 +58,66 @@ python scripts/make_charts.py      # regenerate every README chart + numbers.jso
 ---
 
 ## Session log
+
+### 2026-10-26 — The simulator was too easy; now it is calibrated
+Decomposing the simulation study's CLV, the like-for-like comparison promised
+yesterday, showed the control had been passing for the wrong reason.
+
+| original simulator | CLV | margin | movement |
+|---|---|---|---|
+| efficient book | −1.59% | −1.89% | **+0.30%** [+0.11, +0.48] |
+| random-model control | −1.20% | −1.66% | **+0.46%** [+0.35, +0.56] |
+
+A model betting random probabilities got the market moving toward its bets.
+It passed the no-false-positive check only because the margin was bigger.
+
+#### Diagnosis by elimination
+- Every outcome of the simulated efficient book, no selection: movement
+  −0.00%. **The instrument is sound**, and the movement came from selection.
+- Longest 25% of opening prices, no model at all: simulator **+0.89%**, real
+  EPL 2012–25 (Bet365 open, Pinnacle close) **+0.12%** [+0.06, +0.17], about
+  seven times too generous.
+- Two causes, separated by switching the de-vig and the error structure:
+  margin loaded proportionally but read with Shin (**+0.50**), and a close
+  that corrected 100% of the opening error (**+0.32**).
+
+#### Fixes
+- `load_margin_shin`: the exact inverse of `staking.devig_shin`, so the
+  simulator loads margin the way the pipeline unwinds it. Round trip to 1e-10.
+- The close keeps a share of the opening error. The share corrected is chosen
+  by `simulation_study.py --calibrate`, which measures the model-free statistic
+  on the seasons named in `config.yaml` `simulation.calibration_seasons` and
+  across a grid on the simulator, then writes `simulation_calibration.json`.
+  **Result: 0.4** (simulated +0.13% vs real +0.12%); 0.2–0.5 all fit.
+- Sensitivity: detection threshold **4.9 points at shares 0.2, 0.4 and 0.5**.
+  The headline survives, and is now earned.
+- Calibrated control movement: +0.06% [+0.01, +0.12], within what real-market
+  price selection gives, which is now the test's bar. The test I wrote first
+  ("no movement toward the bets") was wrong: the real market has the faint
+  effect too.
+- `--close-corrects` for sensitivity runs refuses to write without `--out`.
+- The README's simulation table was never held to its JSON. It is now, by two
+  docs tests, which is how all of its figures were caught changing.
+
+#### 13 seasons: the fit does not scale
+The walk-forward on EPL 2012–25 (4,940 matches) was only about halfway (151
+of roughly 300 windows) by the end of the session, and each window was slower
+than the last. The cause is structural: every fit uses
+all history and every team ever seen, and L-BFGS-B's finite-difference
+gradient costs (parameters × matches) per step. At a 180-day half-life a
+match three years old carries weight 2^-6 ≈ 1.6%, and a match from 2013 carries
+about 10^-7 by 2024, so almost all of that cost buys nothing.
+On 13 seasons, calibration DID improve the model out of sample on both
+scoring rules (it did not on 2), consistent with the 2-season failure being a
+short fitting window.
+
+#### Next
+1. A history cap (`model.max_history_days`), justified by the weight it
+   discards, with a test that the 2-season headline is unchanged. Two seasons
+   fit inside any sensible cap, so only the fingerprint moves.
+2. Then the 13-season walk-forward as a second, larger result.
+3. Exploration notebook, STUDY_GUIDE.md.
+
 
 ### 2026-10-25 — The real numbers, two reporting bugs, and where the CLV went
 football-data.co.uk is still blocked, but two GitHub mirrors of it together

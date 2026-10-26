@@ -177,3 +177,117 @@ def test_the_study_states_that_it_is_simulated(recorded):
     note = recorded.get("note", "").lower()
     assert "simulated" in note
     assert "no claim" in note or "makes no claim" in note
+
+
+# --- Added 26 Oct 2026: the decomposition, recorded ------------------------
+
+def test_every_recorded_arm_is_decomposed(recorded):
+    """Each arm records margin paid and market movement, and the identity holds:
+    CLV points = margin paid + movement. Without both parts, the simulated and
+    real runs can only be compared on CLV, which mixes in a margin that is a
+    SETTING here and Bet365's choice in the real data."""
+    arms = [level for level in recorded["levels"] if level.get("bets", 0)]
+    arms.append(recorded["noise_control"])
+    for arm in arms:
+        assert "movement" in arm, "simulation_study.json predates the decomposition"
+        assert arm["margin_paid"] + arm["movement"] == pytest.approx(
+            arm["clv_points"], abs=1e-9)
+
+
+CALIBRATION = REPO_ROOT / "docs" / "charts" / "simulation_calibration.json"
+
+
+@pytest.fixture(scope="module")
+def calibration():
+    if not CALIBRATION.exists():
+        pytest.skip("docs/charts/simulation_calibration.json is absent - run "
+                    "`python scripts/simulation_study.py --calibrate` on real data")
+    return json.loads(CALIBRATION.read_text())
+
+
+def test_no_information_earns_no_more_movement_than_the_real_market_gives(
+        recorded, calibration):
+    """Regression, 26 Oct 2026: the control passed for the wrong reason.
+
+    Decomposed, the random-probability control showed market movement of
+    +0.46 points TOWARD its bets, interval clear of zero. It passed the
+    no-false-positive check only because the 1.7-point margin hid it. The
+    cause was the simulator, not the instrument: bets chosen because a price
+    looked long were prices that were long by chance, and the simulated close
+    corrected all of that error and also mis-read a proportionally loaded
+    margin through Shin.
+
+    The real market has a faint version of the same effect, so the bar is not
+    zero. It is the movement real-market price selection earns with no model
+    at all: an information-free bettor may not do better in the simulator than
+    in the market it imitates.
+    """
+    ceiling = calibration["real_target"]["upper"]
+    efficient = next(level for level in recorded["levels"] if level["bias"] >= 1.0)
+    for name, arm in (("efficient book", efficient),
+                      ("random-model control", recorded["noise_control"])):
+        assert arm["movement"] <= ceiling, (
+            f"{name}: movement {arm['movement']:+.2%} exceeds what price selection "
+            f"earns in the real market ({ceiling:+.2%})")
+
+
+def test_the_simulator_loads_margin_the_way_the_pipeline_unwinds_it(study_module):
+    """Shin-loaded prices must de-vig back to exactly the probabilities that
+    built them. If this fails, every simulated CLV carries a phantom movement
+    on long prices (about +0.5 points when the loading was proportional)."""
+    from src.staking import devig_shin
+    for fair, margin in (([0.50, 0.30, 0.20], 0.055),
+                         ([0.85, 0.10, 0.05], 0.022),
+                         ([0.08, 0.17, 0.75], 0.055)):
+        implied = study_module.load_margin_shin(fair, margin)
+        assert implied.sum() == pytest.approx(1 + margin, abs=1e-10)
+        recovered, note = devig_shin(1 / implied)
+        assert note["method"] == "shin"
+        assert recovered == pytest.approx(fair, abs=1e-10)
+
+
+def test_the_simulator_uses_the_calibrated_share(study_module, calibration):
+    """The constant in the file must be the one the calibration chose. A
+    hand-edited share would make the study's realism an assertion again."""
+    assert study_module.OPENING_ERROR_CORRECTED == pytest.approx(
+        calibration["closest_share"])
+
+
+def test_the_calibrated_simulator_matches_the_real_statistic(study_module,
+                                                             calibration):
+    """Recompute the calibration statistic live at the chosen share: it must
+    still fall inside the real market's interval. Catches any later change to
+    the generator that quietly breaks the calibration."""
+    market, _ = study_module.build_market(
+        1.00, calibration["simulated_seasons_per_point"], calibration["seed"])
+    stat = study_module.selection_movement(
+        market[["OddsH", "OddsD", "OddsA"]], market[["CloseH", "CloseD", "CloseA"]])
+    target = calibration["real_target"]
+    assert target["lower"] <= stat["estimate"] <= target["upper"]
+
+
+def test_a_sensitivity_run_cannot_overwrite_the_published_study(study_module,
+                                                                 monkeypatch):
+    """--close-corrects changes the simulator, so its output must go elsewhere."""
+    monkeypatch.setattr(sys, "argv", ["simulation_study.py",
+                                      "--close-corrects", "0.2"])
+    with pytest.raises(SystemExit) as stopped:
+        study_module.main()
+    assert stopped.value.code != 0
+
+
+def test_calibration_refuses_when_the_named_seasons_are_missing(study_module,
+                                                                tmp_path, capsys):
+    """The calibration target comes from seasons named in config.yaml. If any
+    are missing it must stop, not quietly calibrate on whatever is present -
+    two seasons give a target of a different sign from thirteen."""
+    from src.config import load_config
+    config = load_config()
+    config["simulation"] = {"calibration_seasons": ["9091"]}   # never built
+
+    class Args:
+        seed, out = 20261023, str(tmp_path)
+
+    assert study_module.calibrate(config, Args()) == 1
+    assert "E0_9091.csv" in capsys.readouterr().out
+    assert not (tmp_path / study_module.CALIBRATION_FILE).exists()

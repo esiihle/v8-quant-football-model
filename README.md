@@ -4,7 +4,7 @@
 
 ![tests](https://github.com/esiihle/v8-quant-football-model/actions/workflows/tests.yml/badge.svg)
 ![python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
-![tests count](https://img.shields.io/badge/tests-208-brightgreen)
+![tests count](https://img.shields.io/badge/tests-217-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 ---
@@ -16,39 +16,68 @@ that almost no backtest answers: **can the machinery tell signal from noise?**
 A pipeline reporting "+4% CLV" is worthless unless you know it would have
 reported nothing had there been nothing there.
 
-`scripts/simulation_study.py` settles it. Three simulated markets whose
+`scripts/simulation_study.py` settles it. It builds simulated markets whose
 properties are known *by construction*, because the data-generating process is
 written in the file:
 
 ![what this backtester can and cannot see](docs/charts/simulation-detection-threshold.png)
 
-| Market | Truth | Measured CLV | Verdict |
-|---|---|---|---|
-| Efficient book | no edge exists | −1.59% [−1.77%, −1.38%] | correctly reports none |
-| Underpriced by 2.0% | small edge | −0.92% [−1.13%, −0.71%] | below detection |
-| Underpriced by 4.9% | real edge | **+0.74% [+0.48%, +0.97%]** | **finds it** |
-| Underpriced by 8.3% | large edge | **+3.34% [+3.03%, +3.64%]** | **finds it** |
-| *Control:* random model, efficient book | no edge, no information | −1.20% [−1.31%, −1.09%] | invents nothing |
+| Market | Truth | Measured CLV | = margin + **market movement** | Verdict |
+|---|---|---|---|---|
+| Efficient book | no edge exists | −1.79% [−1.90%, −1.70%] | −1.92% + **+0.13%** | correctly reports none |
+| Underpriced by 2.0% | small edge | −1.03% [−1.17%, −0.90%] | −1.93% + **+0.90%** | below detection |
+| Underpriced by 4.9% | real edge | **+0.74% [+0.51%, +0.95%]** | −1.93% + **+2.67%** | **finds it** |
+| Underpriced by 8.3% | large edge | **+3.29% [+3.01%, +3.58%]** | −1.91% + **+5.20%** | **finds it** |
+| *Control:* random model, efficient book | no edge, no information | −1.60% [−1.65%, −1.55%] | −1.67% + **+0.06%** | invents nothing |
 
 Two things are established here, and the second matters more than the first:
 
-1. **The instrument responds.** Measured CLV rises monotonically with the
-   mispricing planted in the book, and crosses zero where it should.
-2. **The instrument does not hallucinate.** On an efficient book, and on a model
-   betting random probabilities, it reports no edge. A backtester that invents
-   edges is worse than useless, and that is the failure this control rules out.
+1. **The instrument responds.** Measured CLV, and the market movement inside
+   it, rise monotonically with the mispricing planted in the book.
+2. **The instrument does not hallucinate.** On an efficient book, and for a
+   model betting random probabilities, it reports no edge. A backtester that
+   invents edges is worse than useless, and that is the failure this control
+   rules out.
 
 **The detection threshold is the number to quote: on 760 matches this pipeline
 can establish an edge once the bookmaker is wrong by about 5 probability points,
 and not below that.** It is a statement about statistical power, and it is what
-makes the real-data result below interpretable — a measured movement near zero
+makes the real-data result below interpretable. A measured movement near zero
 means "no edge of detectable size", not "no edge".
+
+### The simulator is calibrated against the real market
+
+The second claim was not always true. Splitting CLV into margin and movement
+showed that the **random-probability control** used to get significant market
+movement toward its bets, with the interval clear of zero. It passed only
+because the bookmaker's margin was larger and hid it. There were two causes, both in the
+simulator, not the instrument:
+
+* **Margin loaded the wrong way.** The simulator spread its margin
+  proportionally, while the pipeline de-vigs with Shin, which assumes margin
+  sits on longshots, as real books load it. Reading one convention with the
+  other made long prices appear to shorten on their own. The simulator now
+  loads margin with the exact inverse of the pipeline's Shin de-vig.
+* **A closing line that corrected too much.** The simulated close corrected
+  *all* of the opening price's error, so any rule that bet long prices earned
+  movement for free. Real books share most of their information between open
+  and close.
+
+How much of the opening error the close corrects is now **measured, not
+chosen**. `python scripts/simulation_study.py --calibrate` measures the
+movement on the longest 25% of opening prices, with no model involved, on
+every season file in `data/raw/`, and finds the simulator setting that
+reproduces it. On EPL 2012–25 the real market gives **+0.12%
+[+0.06%, +0.17%]**, and the calibrated simulator (40% of opening error
+corrected) gives +0.13%. The threshold is the same, 4.9 points, at every
+setting from 20% to 50%, all of which fit the real data.
 
 > **This is simulated data and makes no claim about real betting markets.** The
 > edge in each biased market exists because it was deliberately put there.
 > Reproduce it with `python scripts/simulation_study.py` — no download required,
-> and `tests/test_simulation.py` checks the generator produces coherent books
-> and a closing line that genuinely corrects toward the truth.
+> and `tests/test_simulation.py` checks the generator produces coherent books,
+> a closing line that genuinely corrects toward the truth, and the calibration
+> above.
 
 ## The result on real matches
 
@@ -270,7 +299,7 @@ Every component is a transferable quant/credit-risk technique:
 
 ```
 src/            ingest, features, dixon_coles, calibrate, staking, backtest, clv, metrics
-tests/          208 tests; the fragile numerics and every bug above
+tests/          217 tests; the fragile numerics and every bug above
 scripts/        run_pipeline.py · make_charts.py · simulation_study.py · verify_raw_data.py
                 rebuild_raw_from_mirrors.py
 docs/           methodology.md · OVERVIEW.md · ROADMAP.md · charts/

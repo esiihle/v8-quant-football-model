@@ -920,13 +920,21 @@ line then corrects toward the truth.
 
 #### The result
 
-| mispricing planted | measured CLV | detected? |
-|---|---|---|
-| none (efficient book) | −1.59% [−1.77%, −1.38%] | no |
-| 2.0 probability points | −0.92% [−1.13%, −0.71%] | no |
-| 4.9 probability points | +0.74% [+0.48%, +0.97%] | **yes** |
-| 8.3 probability points | +3.34% [+3.03%, +3.64%] | **yes** |
-| *control:* random model, efficient book | −1.20% [−1.31%, −1.09%] | no |
+*Calibrated simulator, 26 Oct 2026 (§8.7). The authoritative copy is
+`docs/charts/simulation_study.json`.*
+
+| mispricing planted | measured CLV | margin paid | market movement | detected? |
+|---|---|---|---|---|
+| none (efficient book) | −1.79% [−1.90%, −1.70%] | −1.92% | +0.13% [+0.03%, +0.23%] | no |
+| 2.0 probability points | −1.03% [−1.17%, −0.90%] | −1.93% | +0.90% [+0.76%, +1.04%] | no |
+| 4.9 probability points | +0.74% [+0.51%, +0.95%] | −1.93% | +2.67% [+2.44%, +2.89%] | **yes** |
+| 8.3 probability points | +3.29% [+3.01%, +3.58%] | −1.91% | +5.20% [+4.91%, +5.49%] | **yes** |
+| *control:* random model, efficient book | −1.60% [−1.65%, −1.55%] | −1.67% | +0.06% [+0.01%, +0.12%] | no |
+
+Reading the movement column: detection needs movement to exceed the margin,
+so the threshold is set as much by the bookmaker's cut as by the sample size.
+A sharper book (smaller margin) would lower the threshold; a softer one would
+raise it.
 
 Two properties are established, and the second matters more:
 
@@ -976,6 +984,64 @@ The general point is the one running through §8.5 and §10 of the companion
 project: **a tool that cannot fail loudly will eventually fail quietly.** A
 simulator held to a weaker standard than the data it stands in for is exactly
 that kind of tool.
+
+### 8.7 Calibrating the simulator against the real market *(26 Oct 2026)*
+
+Decomposing the study's CLV (§6.3) exposed a flaw in the simulator. The
+original efficient book and random-model control showed market movement
+**toward** the bets with intervals clear of zero: +0.30 [+0.11, +0.48] and
++0.46 [+0.35, +0.56] points. The no-false-positive check passed only because
+the margin (−1.89 and −1.66) was larger. The control passed for the wrong
+reason.
+
+**Diagnosis, by elimination.** Betting *every* outcome of the simulated
+efficient book showed movement of −0.00 [−0.08, +0.09]: the measurement was
+sound, and the movement came from *which* bets were selected. Betting only the
+longest 25% of opening prices, with no model at all, showed +0.89. The
+real-data equivalent, Bet365's opening price against Pinnacle's close, is
++0.12 [+0.06, +0.17] over EPL 2012–25. Two causes then separated cleanly:
+
+| longest 25% of prices, no model | Shin de-vig | proportional de-vig |
+|---|---|---|
+| close keeps all opening error | +0.50 | +0.01 |
+| close corrects all opening error (original) | +0.82 | +0.32 |
+
+1. **Margin-loading mismatch (+0.50).** The simulator loaded margin
+   proportionally, and the pipeline de-vigs with Shin, which assumes a
+   longshot-weighted margin. Shin over-shrinks longshots in a proportional
+   book, more at the 5.5% opening margin than at the 2.2% close, so long prices
+   "shortened" with nothing happening. **Fix:** `load_margin_shin`, the exact
+   inverse of `staking.devig_shin`,
+   $\pi_i = \sqrt{\Pi\,((1-z)p_i^2 + z p_i)}$ with
+   $\Pi = (\sum_j \sqrt{(1-z)p_j^2 + z p_j})^2$ and $z$ solved for the target
+   margin. The round trip is exact to $10^{-10}$, as tested.
+2. **Over-correcting close (+0.32).** Opening and closing errors were drawn
+   independently, so the close corrected 100% of the opening's error, which is
+   maximal mean reversion. **Fix:** the close keeps a share of the opening error,
+   `close_error = (1 − c)·open_error + fresh`, where `c` is the share corrected.
+
+**Choosing c is a measurement, not a judgement.** `--calibrate` computes the
+model-free statistic above on every file in `data/raw/` and on the simulator
+for c = 0.0, 0.1, …, 1.0, and writes `simulation_calibration.json`. The
+closest match is **c = 0.4** (simulated +0.13 against real +0.12), and every
+c from 0.2 to 0.5 falls inside the real interval. The detection threshold is
+4.9 points at c = 0.2, 0.4 and 0.5 alike, so the headline does not depend on
+the choice within the range the data allows.
+
+**Why the remaining control movement is not a defect.** The calibrated control
+still shows +0.06 [+0.01, +0.12]. The real market has the same faint effect,
+since bets chosen on price earn a little movement in reality too. The test
+therefore sets the bar at the real market's own value
+(`test_no_information_earns_no_more_movement_than_the_real_market_gives`), not
+at zero: an information-free bettor may do no better in the simulator than in
+the market it imitates.
+
+**The general point.** A simulator validates an instrument only to the extent
+that it shares the instrument's assumptions about the world. This one used a
+different margin convention from the pipeline reading it, and nothing failed,
+because the margin happened to be large enough to mask the error. Calibrating
+against a model-free statistic of the real data is what turns "the simulator is
+realistic" from an assertion into a test.
 
 ## References
 - Dixon, M. J. & Coles, S. G. (1997). *Modelling Association Football Scores and

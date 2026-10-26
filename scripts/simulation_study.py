@@ -59,6 +59,7 @@ import warnings
 from pathlib import Path
 
 import numpy as np
+from scipy.optimize import brentq
 import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -128,24 +129,118 @@ MAX_SINGLE_OUTCOME = 0.92
 MIN_DECIMAL_ODDS = 1.01
 
 
-def price(probabilities, margin, noise, rng):
+def load_margin_shin(probabilities, margin):
+    """Load a margin onto fair probabilities the way Shin's model says books do.
+
+    Added 26 Oct 2026. The simulator used to load margin PROPORTIONALLY
+    (every outcome scaled by 1 + margin), while the pipeline de-vigs with
+    Shin, which assumes the margin sits mostly on longshots. Reading a
+    proportional book with Shin over-shrinks longshots, and more so at the
+    opening (5.5% margin) than the close (2.2%), so long prices appeared to
+    "shorten" by about +0.5 points with nothing happening at all.
+
+    This is the exact inverse of staking.devig_shin. For insider share z:
+
+        pi_i = sqrt( Pi * ((1 - z) p_i^2 + z p_i) )
+        Pi   = ( sum_j sqrt((1 - z) p_j^2 + z p_j) )^2
+
+    and z is solved so the book sums to 1 + margin. At z = 0 the book is fair;
+    Pi rises with z, so the root is bracketed.
+    """
+    p = np.asarray(probabilities, dtype=float)
+    p = p / p.sum()
+    if margin <= 0:
+        return p
+
+    def book_sum(z):
+        return float(np.sum(np.sqrt((1 - z) * p ** 2 + z * p)) ** 2)
+
+    z = brentq(lambda z: book_sum(z) - (1.0 + margin), 0.0, 0.5, xtol=1e-12)
+    return np.sqrt(book_sum(z) * ((1 - z) * p ** 2 + z * p))
+
+
+def price(probabilities, margin, noise, rng, shocks=None):
     """Turn probabilities into decimal odds, with a bookmaker's margin.
 
     `noise` is the bookmaker's own estimation error. A real book is not a
     perfect estimate of the truth; it is a good estimate with a margin on top.
+
+    `shocks` [added 26 Oct 2026] lets the caller supply the three log-errors
+    directly instead of drawing fresh ones, so the closing price can SHARE
+    part of the opening price's error. See OPENING_ERROR_CORRECTED.
     """
-    distorted = np.asarray(probabilities, dtype=float) * np.exp(rng.normal(0, noise, 3))
+    if shocks is None:
+        shocks = rng.normal(0, noise, 3)
+    distorted = np.asarray(probabilities, dtype=float) * np.exp(shocks)
     distorted = distorted / distorted.sum()
 
     # Cap, then renormalise, then load the margin — in that order, so the book
     # still sums to 1 + margin after the cap has moved mass around.
     distorted = np.clip(distorted, 0.004, MAX_SINGLE_OUTCOME)
-    distorted = distorted / distorted.sum() * (1.0 + margin)
+    distorted = load_margin_shin(distorted / distorted.sum(), margin)
 
     return np.maximum(np.round(1.0 / distorted, 3), MIN_DECIMAL_ODDS)
 
 
-def build_market(bias, n_seasons, seed):
+# --- How much of the opening price's error the closing price corrects ---------
+#
+# Added 26 Oct 2026, after the CLV decomposition exposed a flaw in this file.
+#
+# The opening and closing prices used to carry INDEPENDENT errors around the
+# truth, so the close corrected 100% of the opening's error. That makes any
+# rule that selects on price profitable without information: bets placed
+# because the price looked long are, on average, prices that were long BY
+# CHANCE, and the close then shortens them. Measured on the efficient book:
+#
+#     movement on the longest 25% of opening prices, NO model at all
+#         simulator (independent errors)   +0.89 points
+#         real EPL 2012-25, Bet365 vs Pinnacle close  +0.12 points
+#
+# A random-probability model inherited about +0.5 points of movement this way,
+# and passed the study's control only because the margin hid it.
+#
+# Real books share most of their information between open and close, so the
+# close corrects only part of the opening's error. That share is the parameter
+# below, and its value is NOT a judgement: `--calibrate` measures the same
+# statistic on data/raw and on the simulator across a grid of shares, and the
+# value here is the one whose simulated statistic matches the real one. The
+# target and the match are recorded in simulation_study.json.
+OPENING_NOISE = 0.075          # log-scale error of the opening price
+CLOSING_FRESH_NOISE = 0.030    # new error the closing price adds of its own
+OPENING_ERROR_CORRECTED = 0.4   # from `--calibrate` on EPL 2012-25, 26 Oct 2026:
+                                # real +0.12% [+0.06%, +0.17%], simulated +0.13%;
+                                # shares 0.2-0.5 all fall inside the real interval
+
+
+def selection_movement(opening, closing, devig_method="shin", share=0.25):
+    """Market movement on the longest `share` of opening prices, with no model.
+
+    The calibration statistic. It needs no model, no staking and no results -
+    only two books - so it can be measured identically on real and simulated
+    data, and nothing the model does can leak into it.
+
+    Parameters
+    ----------
+    opening, closing : array (n, 3)
+        Decimal odds, home/draw/away.
+
+    Returns
+    -------
+    dict with estimate, lower, upper, n (percentile bootstrap, seed 7).
+    """
+    opening = np.asarray(opening, dtype=float)
+    closing = np.asarray(closing, dtype=float)
+    fair_open = np.array([staking.market_probabilities(row, devig_method)[0]
+                          for row in opening])
+    fair_close = np.array([staking.market_probabilities(row, devig_method)[0]
+                           for row in closing])
+    raw = 1.0 / opening
+    longest = raw <= np.quantile(raw, share)       # low implied prob = long price
+    movement = (fair_close - fair_open)[longest]
+    return clv.bootstrap_interval(movement, np.mean, 2000, 0.95, 7)
+
+
+def build_market(bias, n_seasons, seed, close_corrects=None):
     """Generate a league whose mispricing is known by construction.
 
     `bias` is the factor the bookmaker applies to home attack strength when
@@ -156,6 +251,13 @@ def build_market(bias, n_seasons, seed):
     nothing to a reader; "the book is wrong by 2.4 probability points on the
     home win" is the number that can be compared against a real market.
     """
+    if close_corrects is None:
+        close_corrects = OPENING_ERROR_CORRECTED
+    if close_corrects is None:
+        raise ValueError(
+            "OPENING_ERROR_CORRECTED is unset: run "
+            "`python scripts/simulation_study.py --calibrate` against real data "
+            "and set it to the value it reports.")
     rng = np.random.default_rng(seed)
     mispricing = []
 
@@ -197,8 +299,17 @@ def build_market(bias, n_seasons, seed):
                     closing_truth = truth
                     mispricing.append(0.0)
 
-                opening = price(opening_truth, margin=0.055, noise=0.075, rng=rng)
-                closing = price(closing_truth, margin=0.022, noise=0.030, rng=rng)
+                # The opening price's error, and how much of it the close keeps.
+                # Until 26 Oct 2026 the two errors were drawn independently,
+                # so the close corrected ALL of the opening's error. See
+                # OPENING_ERROR_CORRECTED for why that was wrong.
+                open_error = rng.normal(0, OPENING_NOISE, 3)
+                close_error = ((1.0 - close_corrects) * open_error
+                               + rng.normal(0, CLOSING_FRESH_NOISE, 3))
+                opening = price(opening_truth, margin=0.055, noise=OPENING_NOISE,
+                                rng=rng, shocks=open_error)
+                closing = price(closing_truth, margin=0.022, noise=CLOSING_FRESH_NOISE,
+                                rng=rng, shocks=close_error)
 
                 rows.append({
                     "MatchID": f"S{season}R{round_number:02d}_{home[-2:]}{away[-2:]}",
@@ -224,6 +335,28 @@ def build_market(bias, n_seasons, seed):
     return pd.DataFrame(rows), float(np.mean(mispricing))
 
 
+def decomposition_fields(clv_result):
+    """CLV split into margin paid and market movement [added 26 Oct 2026].
+
+    The real-data run showed its negative CLV was all margin, with market
+    movement indistinguishable from zero. The efficient-book arm here also shows
+    negative CLV, and the two are only comparable on the MOVEMENT component:
+    the margin is a setting in this file, not a property of any model. So every
+    arm records both parts. See clv.decompose_clv for the identity.
+    """
+    parts = clv_result.get("decomposition")
+    if not parts:
+        return {}
+    move = parts["market_movement"]
+    return {
+        "margin_paid": float(parts["margin_paid"]["estimate"]),
+        "movement": float(move["estimate"]),
+        "movement_low": float(move["lower"]),
+        "movement_high": float(move["upper"]),
+        "movement_verdict": parts["movement_verdict"],
+    }
+
+
 def run_pipeline_scenario(matches, config):
     """Walk-forward the real pipeline over a simulated market."""
     walk = backtest.walk_forward(matches, config)
@@ -243,6 +376,7 @@ def run_pipeline_scenario(matches, config):
         "clv_low": float(points["lower"]),
         "clv_high": float(points["upper"]),
         "beat_rate": float(clv_result["beat_rate"]["estimate"]),
+        **decomposition_fields(clv_result),
     }
 
 
@@ -288,6 +422,7 @@ def run_noise_control(matches, config, seed):
         "clv_low": float(points["lower"]),
         "clv_high": float(points["upper"]),
         "beat_rate": float(clv_result["beat_rate"]["estimate"]),
+        **decomposition_fields(clv_result),
     }
 
 
@@ -390,6 +525,95 @@ def draw_detection_chart(rows, noise, threshold, args, out_dir):
     print(f"  wrote {shown}")
 
 
+CALIBRATION_FILE = "simulation_calibration.json"
+CALIBRATION_GRID = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+CALIBRATION_SEASONS = 6        # simulated seasons per grid point (2,280 matches)
+
+
+def calibrate(config, args):
+    """Choose OPENING_ERROR_CORRECTED from real data. [added 26 Oct 2026]
+
+    Measures `selection_movement` on every season file in data/raw (the real
+    target), then on the simulated EFFICIENT book for each share in
+    CALIBRATION_GRID, and reports the share whose simulated statistic is
+    closest to the real one. Writes everything to simulation_calibration.json.
+
+    It does not edit this file. Setting the constant is a deliberate act, the
+    same rule as make_charts.py writing numbers.json but never the README.
+    """
+    schema = config["schema"]
+    raw_dir = REPO_ROOT / config["data"]["raw_dir"]
+    # The seasons are named in config.yaml, never "whatever is in data/raw":
+    # a calibration that changes with the contents of a folder is not
+    # reproducible.
+    seasons = config.get("simulation", {}).get("calibration_seasons", [])
+    pattern = config["data"]["file_pattern"]
+    files = [raw_dir / pattern.format(league=league, season=season)
+             for league in config["data"]["leagues"] for season in seasons]
+    missing = [path.name for path in files if not path.exists()]
+    if not seasons or missing:
+        print("Cannot calibrate: config.yaml simulation.calibration_seasons "
+              + ("is empty." if not seasons else f"names files not in {raw_dir}:"))
+        for name in missing:
+            print(f"  {name}")
+        print("Rebuild them first:")
+        print("  python scripts/rebuild_raw_from_mirrors.py --odds ../mirror-odds "
+              "--shots ../mirror-shots --seasons " + " ".join(seasons))
+        return 1
+
+    frames = [pd.read_csv(path) for path in files]
+    real = pd.concat(frames, ignore_index=True)
+    columns = schema["odds_columns"] + schema["closing_odds_columns"]
+    real = real.dropna(subset=columns)
+    target = selection_movement(real[schema["odds_columns"]],
+                                real[schema["closing_odds_columns"]],
+                                config["staking"].get("devig_method", "shin"))
+
+    print("\nCalibrating the simulator against real data")
+    print(f"  real files: {', '.join(path.name for path in files)}")
+    print(f"  real matches: {len(real):,}")
+    print("  statistic: market movement on the longest 25% of opening prices,")
+    print("             no model involved")
+    print(f"  REAL TARGET  {target['estimate']:+.2%}  "
+          f"[{target['lower']:+.2%}, {target['upper']:+.2%}]\n")
+
+    print(f"  {'share corrected':>16}  {'simulated statistic':>32}  {'inside target CI':>16}")
+    grid = []
+    for share in CALIBRATION_GRID:
+        market, _ = build_market(1.00, CALIBRATION_SEASONS, args.seed,
+                                 close_corrects=share)
+        stat = selection_movement(market[["OddsH", "OddsD", "OddsA"]],
+                                  market[["CloseH", "CloseD", "CloseA"]],
+                                  config["staking"].get("devig_method", "shin"))
+        inside = target["lower"] <= stat["estimate"] <= target["upper"]
+        grid.append({"share": share, **stat, "inside_target_interval": inside})
+        print(f"  {share:>16.1f}  {stat['estimate']:>+10.2%}  "
+              f"[{stat['lower']:+.2%}, {stat['upper']:+.2%}]  {'yes' if inside else '':>16}")
+
+    best = min(grid, key=lambda row: abs(row["estimate"] - target["estimate"]))
+    print(f"\n  Closest match: share = {best['share']:.1f} "
+          f"(simulated {best['estimate']:+.2%} vs real {target['estimate']:+.2%})")
+    print(f"  Set OPENING_ERROR_CORRECTED = {best['share']:.1f} in "
+          "scripts/simulation_study.py, then rerun the study.")
+
+    out_dir = Path(args.out) if args.out else REPO_ROOT / "docs" / "charts"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "statistic": "mean de-vigged market movement on the longest 25% of "
+                     "opening prices, no model",
+        "real_files": [path.name for path in files],
+        "real_matches": int(len(real)),
+        "real_target": target,
+        "simulated_seasons_per_point": CALIBRATION_SEASONS,
+        "seed": args.seed,
+        "grid": grid,
+        "closest_share": best["share"],
+    }
+    (out_dir / CALIBRATION_FILE).write_text(json.dumps(payload, indent=2) + "\n")
+    print(f"  wrote {out_dir / CALIBRATION_FILE}\n")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -403,7 +627,23 @@ def main():
                         help="Override the bias levels swept")
     parser.add_argument("--quick", action="store_true",
                         help="Fewer bootstrap resamples; noisier intervals")
+    parser.add_argument("--close-corrects", type=float, default=None,
+                        help="Override OPENING_ERROR_CORRECTED, for a "
+                             "sensitivity run only (results go to --out)")
+    parser.add_argument("--calibrate", action="store_true",
+                        help="Measure how much opening-price error the real "
+                             "closing line corrects, and stop")
     args = parser.parse_args()
+
+    if args.calibrate:
+        return calibrate(load_config(args.config), args)
+    if args.close_corrects is not None:
+        # A sensitivity run must never overwrite the published study.
+        if args.out is None:
+            parser.error("--close-corrects needs --out: a sensitivity run may "
+                         "not write into docs/charts")
+        global OPENING_ERROR_CORRECTED
+        OPENING_ERROR_CORRECTED = args.close_corrects
 
     config = load_config(args.config)
     set_seed(config.get("seed", 42))
@@ -439,6 +679,10 @@ def main():
                   f"CLV {result['clv_points']:+.2%} "
                   f"[{result['clv_low']:+.2%}, {result['clv_high']:+.2%}]   "
                   f"{'DETECTED' if result['detected'] else 'not detected'}")
+            if "movement" in result:
+                print(f"    = margin {result['margin_paid']:+.2%}  +  movement "
+                      f"{result['movement']:+.2%} "
+                      f"[{result['movement_low']:+.2%}, {result['movement_high']:+.2%}]")
         else:
             print("    no bets placed")
         print()
@@ -454,6 +698,10 @@ def main():
         print(f"    bets {noise['bets']:>5}   "
               f"CLV {noise['clv_points']:+.2%} "
               f"[{noise['clv_low']:+.2%}, {noise['clv_high']:+.2%}]")
+        if "movement" in noise:
+            print(f"    = margin {noise['margin_paid']:+.2%}  +  movement "
+                  f"{noise['movement']:+.2%} "
+                  f"[{noise['movement_low']:+.2%}, {noise['movement_high']:+.2%}]")
     print(f"    -> {'FAIL — invented an edge' if noise['detected'] else 'PASS — no edge reported'}\n")
 
     # --- the two things that must hold ----------------------------------
@@ -486,6 +734,10 @@ def main():
         "run_fingerprint": logging_setup.run_fingerprint(config),
         "no_false_positive": bool(no_false_positive),
         "detection_threshold_points": threshold,
+        # How the simulator's prices were built [added 26 Oct 2026]: margin
+        # loaded Shin-style, and the share of opening error the close corrects.
+        "margin_loading": "shin",
+        "opening_error_corrected": OPENING_ERROR_CORRECTED,
         "levels": rows,
         "noise_control": noise,
         "note": ("Simulated data. The edge in each biased level exists because "
