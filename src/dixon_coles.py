@@ -309,7 +309,8 @@ def fit(features, config=None, as_of=None, seed_strengths=None):
         as_of = data["MatchDate"].max() + pd.Timedelta(days=1)
     as_of = pd.Timestamp(as_of)
 
-    weights = time_weights(data["MatchDate"], as_of, half_life)
+    weights = time_weights(data["MatchDate"], as_of, half_life,
+                           float(feature_cfg.get("min_match_weight", 0.0)))
     data = data.loc[weights > 0].copy()
     data["weight"] = weights[weights > 0]
 

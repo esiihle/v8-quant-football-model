@@ -162,6 +162,34 @@ def pct(value, places=1):
     return "n/a" if value is None or not np.isfinite(value) else f"{value:+.{places}%}"
 
 
+def tick_pct(value, _position=None):
+    """Axis tick label: a percentage with exactly as many decimals as it needs.
+
+    Added 27 Oct 2026. Axis formatters used a fixed number of decimals, so on
+    the 13-season CLV chart ticks at -0.25% and -0.75% were printed "-0.3%"
+    and "-0.8%" - labels that disagreed with the gridlines they sat on. A tick
+    label is a measurement; it may not be rounded into a different number.
+    """
+    for places in range(0, 4):
+        if abs(round(value * 100, places) - value * 100) < 1e-9:
+            return f"{value:+.{places}%}"
+    return f"{value:+.3%}"
+
+
+# A bankroll that falls below this share of its start is drawn on a log axis.
+# On a linear axis the 13-season ruin curve sat flat on zero for eight years
+# while still falling from about 50 to 0.2: a log axis shows that the losses
+# were proportional and steady, which is the honest picture of Kelly ruin.
+LOG_SCALE_BELOW = 0.05
+
+
+def use_log_scale(values, start):
+    """Should the bankroll chart use a log axis?"""
+    values = np.asarray(values, dtype=float)
+    return bool(len(values) and np.all(values > 0)
+                and values.min() < LOG_SCALE_BELOW * float(start))
+
+
 # --- Chart 1: CLV distribution (the lead chart) ----------------------------
 
 def chart_clv_distribution(data, illustrative, out_dir):
@@ -217,7 +245,7 @@ def chart_clv_distribution(data, illustrative, out_dir):
 
     ax.set_xlabel("CLV per bet  (probability points vs the closing line)")
     ax.set_ylabel("bets")
-    ax.xaxis.set_major_formatter(lambda v, _: f"{v:+.0%}")
+    ax.xaxis.set_major_formatter(tick_pct)
     ax.grid(axis="y", alpha=0.6)
     ax.set_axisbelow(True)
 
@@ -314,13 +342,22 @@ def chart_bankroll(data, illustrative, out_dir):
     worst = int(np.argmin(values - peak))
     ax.scatter([dates.iloc[worst]], [values[worst]], s=70, color=BAD,
                edgecolor=SURFACE, linewidth=1.5, zorder=6)
-    ax.annotate(f"max drawdown {data['numbers']['max_drawdown']:.1%}",
+    # Two decimals: at one, 99.99% printed as "100.0%", a total loss that did
+    # not happen.
+    ax.annotate(f"max drawdown {data['numbers']['max_drawdown']:.2%}",
                 (dates.iloc[worst], values[worst]),
                 xytext=(12, 10), textcoords="offset points",
                 fontsize=9, color=BAD, fontweight="bold")
 
     ax.set_xlabel("")
-    ax.set_ylabel("bankroll")
+    if use_log_scale(values, start):
+        ax.set_yscale("log")
+        ax.set_ylabel("bankroll (log scale)")
+        # Plain numbers, not powers of ten: "1,000" reads faster than 10^3.
+        ax.yaxis.set_major_formatter(
+            lambda v, _: f"{v:,.0f}" if v >= 1 else f"{v:g}")
+    else:
+        ax.set_ylabel("bankroll")
     ax.grid(axis="y", alpha=0.6); ax.set_axisbelow(True)
     # Below the axes, not "best": `best` put the legend on top of the drawdown
     # fill, which is the one region of this chart a reader needs to see.
@@ -332,7 +369,7 @@ def chart_bankroll(data, illustrative, out_dir):
     finish(fig, ax, out_dir / CHARTS["bankroll"], illustrative,
            title="Walk-forward bankroll: fractional Kelly, out of sample",
            subtitle=f"{data['numbers']['walk_forward_bets']} bets · "
-                    f"ROI {pct(data['numbers']['walk_forward_roi'])} · "
+                    f"ROI {pct(data['numbers']['walk_forward_roi'], 2)} · "
                     f"{data['numbers']['kelly_fraction']:.0%} Kelly")
 
 
@@ -381,7 +418,7 @@ def chart_honesty(data, illustrative, out_dir):
         ax.set_xlim(-0.6, 1.6)
         ax.set_title(f"{name} — {explanation}", fontsize=10, color=INK_SOFT,
                      pad=8)
-        ax.yaxis.set_major_formatter(lambda v, _: f"{v:+.0%}")
+        ax.yaxis.set_major_formatter(tick_pct)
         ax.grid(axis="y", alpha=0.6)
         ax.set_axisbelow(True)
 
@@ -460,7 +497,7 @@ def chart_clv_by_edge(data, illustrative, out_dir):
     ax.set_xlabel("mean edge the model claimed in the band  (low to high)")
     ax.set_ylabel("mean CLV (probability points)"
                   if column == "mean_clv_points" else "mean CLV (odds ratio)")
-    ax.yaxis.set_major_formatter(lambda v, _: f"{v:+.1%}")
+    ax.yaxis.set_major_formatter(tick_pct)
     ax.grid(axis="y", alpha=0.6); ax.set_axisbelow(True)
 
     finish(fig, ax, out_dir / CHARTS["clv_by_edge"], illustrative,

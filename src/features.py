@@ -56,7 +56,7 @@ class FeatureError(Exception):
 # Time decay
 # ===========================================================================
 
-def time_weights(dates, as_of, half_life_days=180):
+def time_weights(dates, as_of, half_life_days=180, min_weight=0.0):
     """Weight each past match by how recent it is.
 
     ``weight = 0.5 ** (age_in_days / half_life)`` — a match exactly one
@@ -65,6 +65,15 @@ def time_weights(dates, as_of, half_life_days=180):
     Matches dated on or after ``as_of`` get weight 0. That is the lookahead
     guard, implemented once, here, rather than trusted to every caller.
 
+    Matches whose weight falls below ``min_weight`` also get weight 0, and every
+    caller drops zero-weight rows, so they leave the fit entirely. [added 27
+    Oct 2026] With a 180-day half-life, 0.01 is reached at
+    180 * log2(100) = 1,196 days, about 3.3 seasons. Every older match together
+    carries about 1% of the total weight of an unbroken fixture list, yet on
+    13 seasons of history they were most of the rows the optimiser evaluated,
+    and they kept teams relegated a decade ago in the parameter vector. The
+    default of 0.0 keeps the old behaviour exactly.
+
     Parameters
     ----------
     dates : array-like of datetime
@@ -72,6 +81,8 @@ def time_weights(dates, as_of, half_life_days=180):
         The moment we are standing at. Nothing from this date onward may count.
     half_life_days : float
         Days for a match's influence to halve. Larger = longer memory.
+    min_weight : float
+        Weights below this are set to 0 (the match is ignored).
 
     Returns
     -------
@@ -84,7 +95,9 @@ def time_weights(dates, as_of, half_life_days=180):
     weights = np.power(0.5, age_days / float(half_life_days))
 
     # age < 0 means the match is in the future relative to as_of: weight 0.
-    return np.where(age_days > 0, weights, 0.0)
+    # A weight below min_weight is too small to matter: weight 0 as well.
+    keep = (age_days > 0) & (weights >= float(min_weight))
+    return np.where(keep, weights, 0.0)
 
 
 # ===========================================================================
@@ -237,7 +250,8 @@ def team_strengths(history, as_of, config=None):
     half_life = float(cfg.get("half_life_days", 180))
     k = float(cfg.get("shrinkage_k", 8))
 
-    weights = time_weights(history["MatchDate"], as_of, half_life)
+    weights = time_weights(history["MatchDate"], as_of, half_life,
+                           float(cfg.get("min_match_weight", 0.0)))
     past = history.loc[weights > 0].copy()
     past["w"] = weights[weights > 0]
 

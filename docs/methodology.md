@@ -159,6 +159,28 @@ match played today counts 1.000, one a season old 0.500, two seasons old 0.250.
 Anything dated on or after `as_of` gets weight 0 — that is where the lookahead
 guard lives.
 
+**The minimum weight** *(added 27 Oct 2026)*. Weights below
+`features.min_match_weight` (0.01) are also set to 0, and every caller drops
+zero-weight rows. With $H = 180$ that is an age of
+
+$$\Delta t^{*} = H \log_2 \frac{1}{0.01} = 180 \times 6.64 \approx 1{,}196 \text{ days} \approx 3.3 \text{ seasons.}$$
+
+For an unbroken fixture list the share of total weight carried by matches older
+than $\Delta t^{*}$ is exactly the cutoff itself, since
+$\int_{\Delta t^{*}}^{\infty} 0.5^{t/H}dt \,/ \int_{0}^{\infty} 0.5^{t/H}dt = 0.5^{\Delta t^{*}/H} = 0.01$.
+So the cutoff discards 1% of the information by construction. What it saves
+is time. Over 13 seasons those old matches were most of the rows every
+likelihood evaluation touched. Every team ever seen also stayed in the
+parameter vector, and L-BFGS-B's finite-difference gradient costs one
+likelihood evaluation per parameter. A team relegated ten years ago cost as
+much per step as Arsenal.
+
+Two properties are tested, not asserted: a fit on all history with the cutoff
+equals a fit on recent history alone, to $10^{-8}$; and a team seen only before
+the cutoff leaves the parameter vector. The 2-season headline never reaches
+the cutoff's age, and all 37 figures in its `numbers.json` were identical with
+and without it. Only the fingerprint changed, because the config did.
+
 ### 2.5 Warm-up rows
 
 A match played before either team has `features.min_prior_matches` of history is
@@ -683,7 +705,8 @@ returns are violently skewed — most bets lose a unit, a few win several.
 ### 6.5 What the first honest run said
 
 *Regenerated 25 Oct 2026 from `data/raw/` (EPL 2023/24 and 2024/25, 760
-matches), run fingerprint `c6c0bb194dcd9ba2`. The authoritative copy of every
+matches), run fingerprint `eddedac58a664dd8` (it read `c6c0bb194dcd9ba2` until the 27 Oct
+minimum-weight setting, which leaves every figure unchanged). The authoritative copy of every
 figure is `docs/charts/numbers.json`. The table previously here came from an
 earlier session and was never reproduced, so it has been replaced, not
 amended.*
@@ -762,7 +785,7 @@ result-affecting config blocks — `seed`, `data`, `schema`, `validation`,
 takes the first 16 characters of the SHA-256. Every run prints it:
 
 ```
-run fingerprint: c6c0bb194dcd9ba2   (same fingerprint => same numbers)
+run fingerprint: eddedac58a664dd8   (same fingerprint => same numbers)
 ```
 
 The properties the tests pin:
@@ -790,6 +813,30 @@ numbers; same fingerprint across platforms ⇒ same numbers to reported
 precision*. `numbers.json` is therefore generated on one designated machine
 (the author's), and the documentation tests compare at the precision the
 documents quote.
+
+A sharper case arrived with the 13-season run (27 Oct 2026): **a decision can
+flip, not just a digit.** One bet's edge sat on the 2% minimum, and Windows and
+Linux put it on opposite sides, giving 4,309 bets against 4,310. The yield
+estimate was unchanged to two decimals, but a bootstrap over a different number
+of bets draws different resamples, so the interval's ends moved by about 0.1
+points. Any threshold rule (minimum edge, stake caps, the lookahead boundary)
+turns a rounding-level difference into a discrete one. That is the strongest
+argument for generating published figures on one machine, and for docs tests
+that fail rather than warn: this one was caught before commit.
+
+### 7.3a Variant configs extend the base *(added 27 Oct 2026)*
+
+A second result needs a second config, and two full copies of a 200-line file
+drift: a threshold changed in one and not the other becomes a difference in
+results that nobody can see. So a config may begin with `extends:` and state
+only what differs (`configs/epl_2012_2025.yaml` is eleven lines). Dicts merge
+key by key, and lists are **replaced**, so an overlay naming 13 seasons means
+those 13. The fingerprint is taken on the merged result.
+
+The comparison between the headline and the long run is only meaningful if
+history is the one thing that changed, and that is a test:
+`test_the_long_run_differs_from_the_headline_only_in_its_seasons` removes the
+seasons from both merged configs and requires them to be identical.
 
 ### 7.4 What is deliberately *not* hardened
 

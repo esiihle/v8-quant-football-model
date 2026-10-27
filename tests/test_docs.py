@@ -36,6 +36,19 @@ NUMBERS = CHART_DIR / "numbers.json"
 # change in the model.
 TOLERANCE = 0.0005
 
+# Chart links may sit in ONE subfolder of docs/charts (the long run's). Until
+# 27 Oct 2026 the pattern had no "/" in it, so a chart in a subfolder was
+# invisible to every link test: broken, missing or stale, nothing would fail.
+CHART_LINK = r"docs/charts/((?:[\w-]+/)?[\w.-]+\.png)"
+
+# The 13-season run [added 27 Oct 2026]. It publishes a SUBSET of the charts:
+# the two that say something the headline's charts do not. Generate exactly
+# these, so the folder holds nothing the README does not show:
+#   python scripts/make_charts.py --config configs/epl_2012_2025.yaml
+#       --out docs/charts/epl_2012_2025 --only bankroll --only clv_by_edge
+LONG_RUN_DIR = REPO_ROOT / "docs" / "charts" / "epl_2012_2025"
+LONG_RUN_CHARTS = {"bankroll-curve.png", "clv-by-claimed-edge.png"}
+
 
 @pytest.fixture(scope="module")
 def readme():
@@ -105,9 +118,10 @@ def numbers():
 def test_readme_only_links_charts_the_script_writes(readme, chart_script,
                                                     simulation_script):
     """A broken image in a README is a broken promise on the front page."""
-    linked = set(re.findall(r"docs/charts/([\w.-]+\.png)", readme))
+    linked = set(re.findall(CHART_LINK, readme))
     produced = (set(chart_script.CHARTS.values())
-                | set(simulation_script.CHARTS.values()))
+                | set(simulation_script.CHARTS.values())
+                | {f"{LONG_RUN_DIR.name}/{name}" for name in LONG_RUN_CHARTS})
 
     unknown = linked - produced
     assert not unknown, (
@@ -120,8 +134,9 @@ def test_every_chart_the_script_writes_is_shown(chart_script, readme,
                                                 simulation_script):
     """A chart nobody looks at is a chart nobody maintains."""
     produced = (set(chart_script.CHARTS.values())
-                | set(simulation_script.CHARTS.values()))
-    linked = set(re.findall(r"docs/charts/([\w.-]+\.png)", readme))
+                | set(simulation_script.CHARTS.values())
+                | {f"{LONG_RUN_DIR.name}/{name}" for name in LONG_RUN_CHARTS})
+    linked = set(re.findall(CHART_LINK, readme))
 
     unused = produced - linked
     assert not unused, (
@@ -266,7 +281,7 @@ def test_every_chart_the_readme_shows_exists_on_disk(readme):
     The exemption is tied to the notice, so it expires with it: delete the
     notice and every linked chart must be present.
     """
-    linked = set(re.findall(r"docs/charts/([\w.-]+\.png)", readme))
+    linked = set(re.findall(CHART_LINK, readme))
     missing = [name for name in linked if not (CHART_DIR / name).exists()]
     if not missing:
         return
@@ -527,3 +542,80 @@ def test_readme_quotes_the_simulator_calibration(readme):
     for key in ("estimate", "lower", "upper"):
         assert_quoted(readme, target[key], f"the real calibration target ({key})")
     assert_quoted(readme, calibration["closest_share"], "the calibrated share")
+
+
+
+# --- Added 27 Oct 2026: the 13-season run is held to its own numbers --------
+
+@pytest.fixture(scope="module")
+def long_numbers():
+    path = LONG_RUN_DIR / "numbers.json"
+    if not path.exists():
+        pytest.skip(f"{path.relative_to(REPO_ROOT)} is absent - run make_charts.py "
+                    "with configs/epl_2012_2025.yaml (see LONG_RUN_DIR)")
+    recorded = json.loads(path.read_text())
+    if recorded.get("real_data") is not True:
+        pytest.fail("the long run's numbers.json came from sample data")
+    return recorded
+
+
+def test_the_long_run_folder_holds_only_what_the_readme_shows():
+    """A subset is published, so the folder must not quietly gain the rest."""
+    if not LONG_RUN_DIR.exists():
+        pytest.skip("long run not generated")
+    on_disk = {path.name for path in LONG_RUN_DIR.glob("*.png")}
+    assert on_disk == LONG_RUN_CHARTS, (
+        f"docs/charts/{LONG_RUN_DIR.name} holds {sorted(on_disk)}; expected "
+        f"exactly {sorted(LONG_RUN_CHARTS)}. Regenerate with --only.")
+
+
+def test_the_long_run_used_thirteen_seasons_and_its_own_fingerprint(long_numbers,
+                                                                    numbers):
+    """Its numbers must come from the long config, not the headline's."""
+    from src.config import load_config
+    from src.logging_setup import run_fingerprint
+    expected = run_fingerprint(load_config(REPO_ROOT / "configs" / "epl_2012_2025.yaml"))
+    assert long_numbers["run_fingerprint"] == expected
+    assert long_numbers["run_fingerprint"] != numbers["run_fingerprint"]
+    assert long_numbers["matches"] > 10 * 380
+
+
+def test_readme_quotes_the_long_run_as_recorded(readme, long_numbers):
+    for key in ("walk_forward_roi", "walk_forward_yield", "walk_forward_yield_low",
+                "walk_forward_yield_high", "clv_points_mean", "clv_points_low",
+                "clv_points_high", "clv_margin_paid", "clv_movement_mean",
+                "clv_movement_low", "clv_movement_high"):
+        assert_quoted(readme, long_numbers[key], f"long run: {key}")
+    assert f"{long_numbers['walk_forward_bets']:,}" in readme
+    assert long_numbers["run_fingerprint"] in readme
+
+
+def test_the_long_run_verdict_follows_its_numbers(readme, long_numbers):
+    """Same rule as the headline: the prose verdict may not outlive the data."""
+    claims_none = "no detectable movement over 13 seasons" in collapse(readme)
+    assert claims_none == (long_numbers.get("clv_movement_verdict") == "none")
+
+
+# --- Added 27 Oct 2026: two chart faults visible only on the long run -------
+
+def test_tick_labels_are_never_rounded_into_a_different_number(chart_script):
+    """Ticks at -0.25% were printed "-0.3%": a label that disagrees with its
+    own gridline. Every tick keeps exactly the decimals it needs."""
+    label = chart_script.tick_pct
+    assert label(-0.0025) == "-0.25%"
+    assert label(-0.0075) == "-0.75%"
+    assert label(0.01) == "+1%"
+    assert label(-0.005) == "-0.5%"
+    assert label(0.0) == "+0%"
+
+
+def test_a_ruined_bankroll_is_drawn_on_a_log_axis(chart_script):
+    """The headline bankroll ends near 15% of its start: linear axis. The long
+    run's falls to about 0.02%: on a linear axis it lies flat on zero for eight
+    years, so it gets a log axis. A bankroll at exactly zero cannot be logged
+    and stays linear."""
+    rule = chart_script.use_log_scale
+    assert rule([1000, 800, 150], 1000) is False
+    assert rule([1000, 300, 0.2], 1000) is True
+    assert rule([1000, 0.0], 1000) is False
+    assert rule([], 1000) is False

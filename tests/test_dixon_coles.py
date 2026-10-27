@@ -460,3 +460,61 @@ def test_invalid_region_penalty_has_a_usable_gradient(config):
         dc._pack(np.zeros(len(teams)), np.zeros(len(teams)), 0.25, 0.99), *args)
 
     assert severe > mild, "the penalty must increase with the size of the violation"
+
+
+# --- Added 27 Oct 2026: the minimum-weight cutoff ---------------------------
+
+def league_with_an_ancient_season(config):
+    """A recent league plus a block played four years earlier that includes a
+    team which has not been seen since (think: relegated a decade ago)."""
+    recent, _ = simulate_league(n_rounds=26, seed=6)
+    old, _ = simulate_league(n_rounds=10, seed=7)
+    old["MatchDate"] = old["MatchDate"] - pd.Timedelta(days=4 * 365)
+    old["MatchID"] = "OLD_" + old["MatchID"]
+    old = old.replace({"HomeTeam": {"Team H": "Old Team"},
+                       "AwayTeam": {"Team H": "Old Team"}})
+    return pd.concat([old, recent], ignore_index=True), recent
+
+
+def with_min_weight(config, value):
+    adjusted = {**config, "features": {**config.get("features", {}),
+                                       "min_match_weight": value}}
+    return adjusted
+
+
+def test_fit_ignores_matches_below_the_minimum_weight(config):
+    """With the cutoff, a fit on all history must equal a fit on recent history
+    alone: the four-year-old block contributes nothing, not "very little"."""
+    everything, recent = league_with_an_ancient_season(config)
+    cut = with_min_weight(config, 0.01)
+
+    pruned = dc.fit(everything, cut)
+    recent_only = dc.fit(recent, with_min_weight(config, 0.0))
+
+    assert pruned["matches_used"] == len(recent)
+    assert set(pruned["teams"]) == set(recent_only["teams"])
+    for team in pruned["teams"]:
+        assert pruned["attack"][team] == pytest.approx(
+            recent_only["attack"][team], abs=1e-8)
+
+
+def test_a_team_seen_only_long_ago_leaves_the_parameter_vector(config):
+    """The speed-up's mechanism: a team absent for longer than the cutoff is
+    no longer a parameter the optimiser has to carry. Without the cutoff it is."""
+    everything, _ = league_with_an_ancient_season(config)
+    assert "Old Team" in dc.fit(everything, with_min_weight(config, 0.0))["teams"]
+    assert "Old Team" not in dc.fit(everything, with_min_weight(config, 0.01))["teams"]
+
+
+def test_the_cutoff_is_inert_on_a_short_history(config):
+    """The 2-season headline never reaches the cutoff's age, so its numbers
+    must be identical with or without it. Checked here on a fit; checked on the
+    full pipeline when the change was made (all 37 figures in numbers.json
+    identical, only the fingerprint moved)."""
+    _, recent = league_with_an_ancient_season(config)
+    a = dc.fit(recent, with_min_weight(config, 0.01))
+    b = dc.fit(recent, with_min_weight(config, 0.0))
+    assert a["matches_used"] == b["matches_used"]
+    for team in a["teams"]:
+        assert a["attack"][team] == b["attack"][team]
+        assert a["defence"][team] == b["defence"][team]

@@ -4,16 +4,14 @@
 > session. This is the fastest way to resume: read this file (plus `docs/ROADMAP.md`)
 > and you know exactly where the project stands. Newest entry at the top.
 
-**Current phase:** Complete. Real-data figures **regenerated and verified** 25 Oct
-2026 from rebuilt EPL 2023/24–2024/25 files; every figure in README and
-methodology is checked against `docs/charts/numbers.json` by `tests/test_docs.py`.
-**Overall status:** 🟢 Every stage built and run on real data; **217 tests, 0
-skipped** with data present; CI runs the suite and a full pipeline run on two
-Python versions; every run prints a reproducibility fingerprint.
-**Next action:** Cap negligible-weight history in the fit so 13 seasons run in
-reasonable time (see 26 Oct), then extend to more seasons (the mirrors carry Pinnacle closing odds
-back to 2012/13) to shrink the detection threshold, then run the exploration
-notebook and fill in its findings table (carried over from 1 Oct).
+**Current phase:** Complete, with two real-data results: the 2-season headline
+(fingerprint `eddedac58a664dd8`) and the 13-season long run (`9ed0f574b163c749`).
+Every figure in README and methodology is checked against its `numbers.json`.
+**Overall status:** 🟢 All stages built and run on real data; see the latest
+entry for the test count. CI runs the suite and a full pipeline run on two
+Python versions.
+**Next action:** Exploration notebook (carried since 1 Oct), then
+`docs/STUDY_GUIDE.md`, then the slide deck.
 **Schedule:** baselined from 28 Sep 2026; target presentation **18 Dec 2026**.
 **Cadence:** one commit per working day (missed 29 Sep — first and last).
 
@@ -58,6 +56,78 @@ python scripts/make_charts.py      # regenerate every README chart + numbers.jso
 ---
 
 ## Session log
+
+### 2026-10-27 — Thirteen seasons, committed as a second result
+#### A minimum match weight: 67 minutes to 11
+`features.min_match_weight: 0.01` drops matches whose time-decay weight is
+below 1%: older than 180 × log2(100) ≈ 1,196 days at the 180-day half-life.
+For an unbroken fixture list those matches carry exactly 1% of the total
+weight (the cutoff is its own tail share), yet over 13 seasons they were most
+of the rows, and they kept long-relegated teams in the parameter vector. Each
+parameter costs a likelihood evaluation per finite-difference gradient.
+- Implemented once, in `time_weights`; both callers already drop zero-weight
+  rows.
+- **2-season headline: all 37 figures in numbers.json bit-identical** with and
+  without the cutoff. Only the fingerprint moved: `c6c0bb194dcd9ba2` became
+  `eddedac58a664dd8`.
+- 13-season chart run: **11 minutes**, against 67 for the uncut pipeline run.
+- Tests: the cutoff boundary at 1,196 days, the default unchanged, a fit on all
+  history equalling a fit on recent history alone (1e-8), a team seen only long
+  ago leaving the parameter vector, and inertness on short history. All but
+  the last fail on the old code; the last is an invariance test and passes on
+  both, as it should.
+
+#### Variant configs: `extends:`
+`configs/epl_2012_2025.yaml` is 11 lines that extend `config.yaml` and change
+only the seasons. Dicts merge and lists replace, and the fingerprint is taken
+on the merged config. `test_the_long_run_differs_from_the_headline_only_in_its_seasons`
+makes the attribution claim checkable: strip the seasons from both configs and
+they must be identical. Loops are refused, and paths resolve relative to the
+file that names them.
+
+#### The long run (fingerprint `9ed0f574b163c749`)
+4,940 matches, 4,309 walk-forward bets. CLV −1.22% [−1.29%, −1.15%] = margin
+−1.24% + movement **+0.02% [−0.05%, +0.09%]**. Same verdict as two seasons,
+with the movement interval far narrower. Yield −6.05% [−15.20%, +3.44%] includes
+zero while ROI is −99.98%: quarter-Kelly on no edge compounds to ruin even when
+the average bet is not significantly negative.
+- Why the margin is smaller than the headline's: Bet365's bet-into overround
+  was about 2.7–3.0% from 2014/15 to 2018/19 and about 5.4% from 2020/21
+  (`verify_raw_data.py`, file by file).
+- Published subset: the bankroll curve and CLV-by-claimed-edge, generated with
+  `--only` so the folder holds nothing the README does not show. A docs test
+  enforces that.
+- **Not published: the in-sample comparison.** With the cutoff, the "fitted on
+  everything" model only knows the last ~3.3 seasons, so for most of 13 seasons
+  it is not in-sample at all (in-sample ROI came out −98.94%). The comparison
+  is only meaningful on the headline.
+- On 13 seasons, Platt calibration improved the model out of sample, which it
+  did not on 2.
+
+Suite: **233 tests, 0 skipped** with both runs' outputs present.
+
+#### A borderline bet that flipped between machines
+The author's Windows run placed **4,309** long-run bets; the build machine's
+Linux run placed 4,310, with the same fingerprint and pinned libraries. One
+bet's edge sat on the 2% minimum, and platform floating point put it on
+opposite sides. The yield estimate was identical (−6.05%), but the bootstrap
+resampled a different number of bets, so both ends of the interval moved
+(−15.20% / +3.44% against −15.30% / +3.57%) by more than the docs tests'
+0.05-point tolerance. The tests caught it before commit, and the published
+figures are the author's machine's, as §7.3 requires. The 2-season run has no
+bet that close to the line and matched to every reported digit.
+
+#### Three faults found by looking at the charts
+- **Chart links in subfolders were invisible to the docs tests.** The link
+  pattern had no "/", so the long run's charts could have been missing or
+  stale with nothing failing. The pattern now allows one subfolder.
+- **Tick labels rounded into different numbers.** Ticks at −0.25% printed as
+  "−0.3%". `tick_pct` uses exactly the decimals a tick needs, on every
+  percentage axis.
+- **A ruin curve on a linear axis** lay flat on zero for eight years. The
+  bankroll chart now uses a log axis when the bankroll falls below 5% of its
+  start (`use_log_scale`). The headline's curve stays linear.
+
 
 ### 2026-10-26 — The simulator was too easy; now it is calibrated
 Decomposing the simulation study's CLV, the like-for-like comparison promised

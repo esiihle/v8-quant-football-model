@@ -261,3 +261,33 @@ def test_no_shot_history_still_builds_features(config):
     matches = make_matches(n_rounds=3)
     feats, report = features.build_features(matches, config)
     assert len(feats) == len(matches)
+
+
+# --- Added 27 Oct 2026: the minimum-weight cutoff ---------------------------
+
+def test_min_weight_drops_only_matches_below_it():
+    """A cutoff of 0.25 at a 180-day half-life is exactly two half-lives: 360
+    days. A match one day younger survives, one day older is dropped."""
+    as_of = pd.Timestamp("2025-01-01")
+    dates = [as_of - pd.Timedelta(days=d) for d in (30, 359, 361, 2000)]
+    w = features.time_weights(dates, as_of, half_life_days=180, min_weight=0.25)
+    assert w[0] > 0 and w[1] > 0.25
+    assert w[2] == 0.0 and w[3] == 0.0
+
+
+def test_default_min_weight_changes_nothing():
+    """min_weight defaults to 0.0, so every pre-27-Oct caller is unaffected."""
+    as_of = pd.Timestamp("2025-01-01")
+    dates = [as_of - pd.Timedelta(days=d) for d in (1, 500, 4000)]
+    assert np.array_equal(features.time_weights(dates, as_of, 180),
+                          features.time_weights(dates, as_of, 180, min_weight=0.0))
+    assert (features.time_weights(dates, as_of, 180) > 0).all()
+
+
+def test_one_percent_cutoff_is_about_three_and_a_third_seasons():
+    """The config comment's claim, checked: 0.01 at a 180-day half-life is
+    reached at 180 * log2(100) = 1,195.9 days."""
+    as_of = pd.Timestamp("2025-01-01")
+    kept = features.time_weights([as_of - pd.Timedelta(days=1195)], as_of, 180, 0.01)
+    dropped = features.time_weights([as_of - pd.Timedelta(days=1197)], as_of, 180, 0.01)
+    assert kept[0] > 0 and dropped[0] == 0.0

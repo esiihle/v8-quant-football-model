@@ -251,3 +251,56 @@ def test_ci_tests_more_than_one_python_version():
     workflow = yaml.safe_load(workflow_path.read_text())
     versions = workflow["jobs"]["test"]["strategy"]["matrix"]["python-version"]
     assert len(versions) >= 2, f"only tests Python {versions}"
+
+
+# --- Added 27 Oct 2026: configs that extend other configs -------------------
+
+def test_an_overlay_merges_dicts_and_replaces_lists(tmp_path):
+    """Dicts merge key by key; a list in the overlay replaces the base's list
+    outright. An overlay naming 13 seasons means 13, not the base's 2 plus 13."""
+    from src.config import load_config
+    (tmp_path / "base.yaml").write_text(
+        "data:\n  seasons: ['2324', '2425']\n  raw_dir: data/raw\n"
+        "staking:\n  kelly_fraction: 0.25\n")
+    (tmp_path / "variant.yaml").write_text(
+        "extends: base.yaml\ndata:\n  seasons: ['1213']\n")
+    merged = load_config(tmp_path / "variant.yaml")
+    assert merged["data"]["seasons"] == ["1213"]
+    assert merged["data"]["raw_dir"] == "data/raw"
+    assert merged["staking"]["kelly_fraction"] == 0.25
+    assert "extends" not in merged
+
+
+def test_extends_is_resolved_relative_to_the_file_that_says_it(tmp_path):
+    from src.config import load_config
+    (tmp_path / "base.yaml").write_text("seed: 7\n")
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "v.yaml").write_text("extends: ../base.yaml\n")
+    assert load_config(tmp_path / "sub" / "v.yaml")["seed"] == 7
+
+
+def test_configs_that_extend_each_other_in_a_loop_are_refused(tmp_path):
+    from src.config import load_config
+    (tmp_path / "a.yaml").write_text("extends: b.yaml\n")
+    (tmp_path / "b.yaml").write_text("extends: a.yaml\n")
+    with pytest.raises(ValueError, match="loop"):
+        load_config(tmp_path / "a.yaml")
+
+
+def test_the_long_run_differs_from_the_headline_only_in_its_seasons():
+    """The 13-season result is only interpretable against the 2-season one if
+    history is the ONE thing that changed. This test is that claim: remove the
+    seasons from both configs and they must be identical."""
+    from src.config import load_config
+    from src.logging_setup import run_fingerprint
+    headline = load_config(REPO_ROOT / "config.yaml")
+    long_run = load_config(REPO_ROOT / "configs" / "epl_2012_2025.yaml")
+    assert len(long_run["data"]["seasons"]) == 13
+    assert run_fingerprint(headline) != run_fingerprint(long_run)
+
+    def without_seasons(config):
+        stripped = {**config, "data": dict(config["data"])}
+        stripped["data"].pop("seasons")
+        return stripped
+
+    assert without_seasons(headline) == without_seasons(long_run)
