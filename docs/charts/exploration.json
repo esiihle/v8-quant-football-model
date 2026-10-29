@@ -1,0 +1,92 @@
+{
+  "matches": 760,
+  "first_match": "2023-08-11",
+  "last_match": "2025-05-25",
+  "seasons": [
+    "2324",
+    "2425"
+  ],
+  "home_win": {
+    "share": 0.4342105263157895,
+    "low": 0.39938930326601,
+    "high": 0.46969350133641025
+  },
+  "draw": {
+    "share": 0.23026315789473684,
+    "low": 0.2017325219436319,
+    "high": 0.2615069769262909
+  },
+  "away_win": {
+    "share": 0.3355263157894737,
+    "low": 0.30285780443200694,
+    "high": 0.36984920707404345
+  },
+  "goals_home": 1.6565789473684212,
+  "goals_away": 1.45,
+  "goals_ratio": 1.1424682395644283,
+  "low_scores": {
+    "0-0": {
+      "observed": 27,
+      "departure_per_match": -0.2988529253076011,
+      "departure_low": -0.5585370270455267,
+      "departure_high": -0.01320041339588307,
+      "departure_league_mean": -0.21783148746734193
+    },
+    "1-0": {
+      "observed": 51,
+      "departure_per_match": -0.11486971087146913,
+      "departure_low": -0.3404911571199182,
+      "departure_high": 0.12810723124224532,
+      "departure_league_mean": -0.09476763883862238
+    },
+    "0-1": {
+      "observed": 46,
+      "departure_per_match": -0.12824179081771692,
+      "departure_low": -0.3746082412387969,
+      "departure_high": 0.13707592502036925,
+      "departure_league_mean": -0.07783475533160322
+    },
+    "1-1": {
+      "observed": 83,
+      "departure_per_match": 0.12956585804900134,
+      "departure_low": -0.10179100444296274,
+      "departure_high": 0.3745319477463753,
+      "departure_league_mean": 0.017749159370015866
+    }
+  },
+  "season_rho": [
+    {
+      "season": "2324",
+      "rho": -0.02010225971222633
+    },
+    {
+      "season": "2425",
+      "rho": -0.03365740223940422
+    }
+  ],
+  "season_rho_median": -0.026879830975815276,
+  "season_rho_negative": 2,
+  "season_rho_sign_test_p": 0.25,
+  "overround_bet_into": 0.05464932513550071,
+  "overround_closing": 0.02959124212320016,
+  "market_ece_home": 0.03574317318178395,
+  "market_ece_home_noise_floor_p95": 0.054212354879255936,
+  "market_ece_home_later_half": 0.04678089354349666,
+  "market_ece_later_half_noise_floor_p95": 0.0736794445625217,
+  "market_detectably_miscalibrated": false,
+  "market_ece_later_half_matches": 380,
+  "shots_on_target_r_home": {
+    "r": 0.583972245643495,
+    "low": 0.5350770823458928,
+    "high": 0.6289680744842888,
+    "n": 760
+  },
+  "shots_on_target_r_away": {
+    "r": 0.6130710079651316,
+    "low": 0.5666601624494214,
+    "high": 0.6556039178716173,
+    "n": 760
+  },
+  "real_data": true,
+  "run_fingerprint": "eddedac58a664dd8"
+}

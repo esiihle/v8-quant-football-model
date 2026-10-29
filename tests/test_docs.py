@@ -619,3 +619,106 @@ def test_a_ruined_bankroll_is_drawn_on_a_log_axis(chart_script):
     assert rule([1000, 300, 0.2], 1000) is True
     assert rule([1000, 0.0], 1000) is False
     assert rule([], 1000) is False
+
+
+# --- Added 29 Oct 2026: the exploration, held like everything else ----------
+
+METHODOLOGY = REPO_ROOT / "docs" / "methodology.md"
+NOTEBOOK = REPO_ROOT / "notebooks" / "01_exploration.ipynb"
+EXPLORATIONS = {"headline": REPO_ROOT / "docs" / "charts" / "exploration.json",
+                "long run": LONG_RUN_DIR / "exploration.json"}
+
+
+def load_exploration(name):
+    path = EXPLORATIONS[name]
+    if not path.exists():
+        pytest.skip(f"{path.relative_to(REPO_ROOT)} is absent - run scripts/explore.py")
+    found = json.loads(path.read_text())
+    assert found.get("real_data") is True, f"{name} exploration.json came from sample data"
+    return found
+
+
+@pytest.mark.parametrize("name", sorted(EXPLORATIONS))
+def test_methodology_quotes_the_exploration_as_measured(name):
+    """Methodology §1.5 is the findings table the notebook used to ask for by
+    hand. Every figure in it must match exploration.json."""
+    found = load_exploration(name)
+    text = METHODOLOGY.read_text(encoding="utf-8")
+    for key in ("home_win", "draw", "away_win"):
+        assert_quoted(text, found[key]["share"], f"{name}: {key}")
+    for score, row in found["low_scores"].items():
+        for key in ("departure_per_match", "departure_low", "departure_high"):
+            assert_quoted(text, row[key], f"{name}: {score} {key}")
+    assert_quoted(text, found["low_scores"]["1-1"]["departure_league_mean"],
+                  f"{name}: 1-1 league-mean departure")
+    for key in ("overround_bet_into", "overround_closing"):
+        assert_quoted(text, found[key], f"{name}: {key}")
+    # Plain decimals, not percentages: quoted to the precision shown.
+    for value, places, label in (
+            (found["market_ece_home"], 4, "market ECE"),
+            (found["market_ece_home_noise_floor_p95"], 4, "market ECE floor"),
+            (found["shots_on_target_r_home"]["r"], 3, "shots-on-target r"),
+            (found["season_rho_sign_test_p"], 3 if found["season_rho_sign_test_p"] < 0.1 else 2,
+             "rho sign test p")):
+        assert f"{value:.{places}f}" in text, f"{name}: methodology does not quote {label}"
+    assert (f"{found['season_rho_negative']} of {len(found['season_rho'])}" in text)
+
+
+@pytest.mark.parametrize("name, config_path", [
+    ("headline", REPO_ROOT / "config.yaml"),
+    ("long run", REPO_ROOT / "configs" / "epl_2012_2025.yaml")])
+def test_each_exploration_came_from_its_own_config(name, config_path):
+    from src.config import load_config
+    from src.logging_setup import run_fingerprint
+    found = load_exploration(name)
+    assert found["run_fingerprint"] == run_fingerprint(load_config(config_path))
+
+
+def notebook_text_outputs():
+    notebook = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+    texts, errors, code_cells, executed = [], [], 0, 0
+    for cell in notebook["cells"]:
+        if cell["cell_type"] != "code":
+            continue
+        code_cells += 1
+        executed += bool(cell.get("outputs"))
+        for output in cell.get("outputs", []):
+            if output["output_type"] == "error":
+                errors.append(f"{output.get('ename')}: {output.get('evalue')}")
+            texts.append("".join(output.get("text", "")))
+            texts.append("".join(output.get("data", {}).get("text/plain", "")))
+    return "\n".join(texts), errors, code_cells, executed
+
+
+def test_the_notebook_was_run_on_real_data_with_the_current_config():
+    """Regression, 29 Oct 2026: the committed notebook showed the 12-match
+    sample's numbers for four weeks, because nothing looked at its outputs.
+
+    The notebook must be saved after a full run, on real data, with no errors,
+    and with the fingerprint of the current config.yaml - so a config change
+    (as on 27 Oct) makes a stale notebook fail here instead of misleading a
+    reader on GitHub."""
+    from src.config import load_config
+    from src.logging_setup import run_fingerprint
+    text, errors, code_cells, executed = notebook_text_outputs()
+    assert executed == code_cells, (
+        f"only {executed} of {code_cells} code cells have saved output: "
+        "Restart & Run All, then save")
+    assert not errors, f"the saved notebook contains errors: {errors}"
+    assert "REAL data from data/raw" in text
+    assert "BUNDLED SAMPLE" not in text
+    fingerprint = run_fingerprint(load_config(REPO_ROOT / "config.yaml"))
+    assert f"run fingerprint: {fingerprint}" in text, (
+        "the notebook's saved outputs come from a different config - rerun it")
+
+
+def test_readme_reads_the_reliability_diagram_against_its_noise_floor(readme, numbers):
+    """Added 29 Oct 2026. A calibration error on a few hundred matches is
+    mostly noise; the README must give the floor beside the diagram."""
+    if "ece_noise_floor_p95" not in numbers:
+        pytest.fail("numbers.json predates the noise floor: rerun make_charts.py")
+    assert_quoted(readme, numbers["ece_noise_floor_p95"], "the ECE noise floor")
+    assert f"{numbers['ece_matches']} matches" in readme
+    claims_undetectable = "cannot\nshow miscalibration" in readme or \
+        "cannot show miscalibration" in collapse(readme)
+    assert claims_undetectable == (not numbers["ece_detectable"])

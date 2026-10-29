@@ -89,6 +89,63 @@ stable across re-downloads and lets a bet in the backtest be traced to a fixture
 Still to be settled: the exact de-vig method (proportional vs. Shin), before
 Phase 5 staking.
 
+### 1.5 What the data shows *(measured 29 Oct 2026)*
+
+From `scripts/explore.py`, which writes `docs/charts/exploration.json` (2
+seasons) and `docs/charts/epl_2012_2025/exploration.json` (13 seasons). The
+functions are in `src/exploration.py`, and `notebooks/01_exploration.ipynb`
+displays them with charts. Intervals are 95%.
+
+| measurement | 2023–25 (760 matches) | 2012–25 (4,940 matches) |
+|---|---|---|
+| home / draw / away | 43.4% / 23.0% / 33.6% | 44.7% / 23.6% / 31.7% |
+| home win, interval | [39.9%, 47.0%] | [43.3%, 46.1%] |
+| goals per match, home / away | 1.66 / 1.45 | 1.55 / 1.25 |
+| 0-0 vs per-match Poisson | −29.9% [−55.9%, −1.3%] | −4.3% [−14.5%, +6.2%] |
+| 1-0 vs per-match Poisson | −11.5% [−34.0%, +12.8%] | +0.1% [−8.9%, +9.2%] |
+| 0-1 vs per-match Poisson | −12.8% [−37.5%, +13.7%] | −12.7% [−21.7%, −3.5%] |
+| 1-1 vs per-match Poisson | +13.0% [−10.2%, +37.5%] | +0.5% [−8.1%, +9.3%] |
+| 1-1 vs **league-mean** Poisson | +1.8% | −11.3% |
+| ρ < 0 in, by season (sign test) | 2 of 2 (p = 0.25) | 10 of 13 (p = 0.046) |
+| overround, bet-into / closing | 5.46% / 2.96% | 4.11% / 2.38% |
+| closing-line ECE, home win | 0.0357 (floor p95 0.0542) | 0.0161 (floor p95 0.0217) |
+| shots on target vs goals, r (home) | 0.584 [0.535, 0.629] | 0.543 [0.523, 0.562] |
+
+**The null decides the answer.** Against a league-mean Poisson, 13 seasons
+show 1-1 eleven per cent rarer than independence predicts. That would argue
+*against* Dixon-Coles, whose ρ < 0 makes 1-1 more likely. Against a per-match
+Poisson, where each match uses its own expected goals from a ρ = 0 fit, the same
+1-1 count is +0.5%. The "deficit" was team mixing: a league of strong and weak
+sides is a mixture of Poissons, and a mixture has a different low-score profile
+from any single Poisson. `test_league_mean_null_mistakes_team_mixing_for_a_low_score_effect`
+reproduces the trap on simulated data with ρ = 0.
+
+**What survives.** 0-1 is rarer than independence by 12.7% [−21.7%, −3.5%],
+the direction ρ < 0 pushes it, and ρ fitted season by season is negative in 10
+of 13 (one-sided sign test p = 0.046). 0-0 and 1-1, which ρ < 0 should *raise*,
+are not detectably different from independence. That is weak, partial support
+for the correction: a pattern one parameter cannot fully express, which is
+consistent with the walk-forward fitting ρ close to zero (§3.2). The correction
+does little work on modern EPL data, and the project says so rather than
+assuming the 1997 finding.
+
+**The market is calibrated to within its noise.** ECE is never zero on finite
+data, so each value is read against its *noise floor*: the 95th percentile of
+the ECE a perfectly calibrated forecaster scores with the same probabilities and
+the same number of matches (`exploration.ece_noise_floor`). The closing line
+sits under its floor on both datasets. The same reading applies to the model's
+Phase 4 ECE (`numbers.json` now records `ece_noise_floor_p95`): on 2 seasons,
+0.061 against a floor of 0.080 cannot show miscalibration either way. A fair
+model-versus-market comparison needs the model's *walk-forward* probabilities on
+the same matches. The Phase 4 numbers come from a single end-of-data fit, which
+on 13 seasons, with the minimum match weight, prices 2013 matches with 2024
+strengths.
+
+**The 2-season 0-0 deficit** (−29.9%, interval just clear of zero) does not
+survive 13 seasons (−4.3%). 2023/24 was a record-scoring season (`verify_raw_data.py`
+reports 3.28 goals per match), and two seasons are a small window: one reason the project
+now reports both.
+
 ## 2. Feature engineering  *(built 9 Oct 2026)*
 
 One row of model inputs per match: each team's attack and defence strength,

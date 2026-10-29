@@ -45,7 +45,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from src.config import load_config, set_seed
 from src import (ingest, features, dixon_coles, calibrate, staking,
-                 backtest, clv, metrics, logging_setup)
+                 backtest, clv, metrics, logging_setup, exploration)
 
 
 # --- The chart manifest ----------------------------------------------------
@@ -612,6 +612,14 @@ def gather(config, use_sample, verbose=False):
             evaluated["home_win"].to_numpy(), realised, n_bins=10)
         numbers["ece"] = float(calibrate.expected_calibration_error(
             evaluated["home_win"].to_numpy(), realised, n_bins=10))
+        # The ECE a perfectly calibrated model would score on these same
+        # probabilities and this many matches [added 29 Oct 2026]. Without it
+        # a 0.06 on ~340 matches cannot be read: that is roughly what pure
+        # noise scores. See exploration.ece_noise_floor.
+        floor = exploration.ece_noise_floor(evaluated["home_win"].to_numpy(), 10)
+        numbers["ece_matches"] = int(len(realised))
+        numbers["ece_noise_floor_p95"] = floor["p95"]
+        numbers["ece_detectable"] = bool(numbers["ece"] > floor["p95"])
 
         # --- in-sample staking, which is the number the honesty chart contrasts
         print("  in-sample staking (for the contrast)")

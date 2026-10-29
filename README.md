@@ -4,7 +4,7 @@
 
 ![tests](https://github.com/esiihle/v8-quant-football-model/actions/workflows/tests.yml/badge.svg)
 ![python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
-![tests count](https://img.shields.io/badge/tests-233-brightgreen)
+![tests count](https://img.shields.io/badge/tests-251-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 ---
@@ -154,8 +154,11 @@ that remains possible, and settling it needs more seasons.
 Calibration did **not** help out of sample on this data. Platt scaling raised
 the expected calibration error on the later half (it ends at 6.13%), and
 isotonic regression made the model worse still. The pipeline reports that
-rather than tuning until it passes. The flat stretch in the bankroll curve is
-the 2024 close season, when no bets were placed.
+rather than tuning until it passes. Read the diagram with its noise floor,
+though. On 341 matches a perfectly calibrated model would score up to 8.02% (the
+95th percentile of the error it gets by chance alone), so this diagram cannot
+show miscalibration in either direction. The flat stretch in the bankroll curve
+is the 2024 close season, when no bets were placed.
 
 
 ### Thirteen seasons: the same answer, measured far more tightly
@@ -208,6 +211,18 @@ that quietly use information unavailable at bet time. V8 is built to do the
 opposite: model match outcomes rigorously, size bets sensibly, and **test any
 claimed edge the way a model-validation function would** — out of time, with
 confidence intervals, against a benchmark that cannot be gamed.
+
+## What the data looks like
+
+Before any modelling, `notebooks/01_exploration.ipynb` measures what the model
+assumes: home advantage, whether low scores are Poisson, the market's margin
+and calibration, and whether shots carry signal. The findings, with intervals,
+are in [methodology §1.5](docs/methodology.md). The most useful one is a
+lesson about method: **the answer to "are low scores Poisson?" depends on the
+null.** Against a league-average Poisson, 13 seasons show 1-1 eleven per cent
+rarer than independence, which would argue against Dixon-Coles. Against each
+match's own expected goals, the effect is gone. It was strong and weak teams
+mixed together, not a property of football.
 
 ## The method
 
@@ -347,10 +362,10 @@ Every component is a transferable quant/credit-risk technique:
 ## Repository structure
 
 ```
-src/            ingest, features, dixon_coles, calibrate, staking, backtest, clv, metrics
-tests/          233 tests; the fragile numerics and every bug above
+src/            ingest, features, dixon_coles, calibrate, staking, backtest, clv, metrics, exploration
+tests/          251 tests; the fragile numerics and every bug above
 scripts/        run_pipeline.py · make_charts.py · simulation_study.py · verify_raw_data.py
-                rebuild_raw_from_mirrors.py
+                rebuild_raw_from_mirrors.py · explore.py
 configs/        epl_2012_2025.yaml (the 13-season run; extends config.yaml)
 docs/           methodology.md · OVERVIEW.md · ROADMAP.md · charts/
 notebooks/      exploration

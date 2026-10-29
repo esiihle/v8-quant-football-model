@@ -10,8 +10,9 @@ Every figure in README and methodology is checked against its `numbers.json`.
 **Overall status:** 🟢 All stages built and run on real data; see the latest
 entry for the test count. CI runs the suite and a full pipeline run on two
 Python versions.
-**Next action:** Exploration notebook (carried since 1 Oct), then
-`docs/STUDY_GUIDE.md`, then the slide deck.
+**Next action:** A fair model-vs-market calibration comparison on the
+model's walk-forward probabilities (see 29 Oct), then `docs/STUDY_GUIDE.md`,
+then the slide deck.
 **Schedule:** baselined from 28 Sep 2026; target presentation **18 Dec 2026**.
 **Cadence:** one commit per working day (missed 29 Sep — first and last).
 
@@ -56,6 +57,64 @@ python scripts/make_charts.py      # regenerate every README chart + numbers.jso
 ---
 
 ## Session log
+
+### 2026-10-29 — The exploration notebook, finally run, and what it overturned
+The notebook carried since 1 Oct had in fact been run once, on the 12-match
+sample, and those outputs had been on GitHub for four weeks: a 58% home-win
+rate, and "0-3 is 603% more common than Poisson". It is the same fault as the
+sample charts of 22 Oct, in a file no test looked at. Its text was also wrong in
+two places: it called the Shin decision "open", and it said Dixon-Coles raises
+all four low scores. ρ < 0 raises 0-0 and 1-1 and *lowers* 1-0 and 0-1.
+
+#### Rebuilt as code, not a notebook
+- `src/exploration.py`: every measurement is a function returning a result,
+  each rate with an interval (Wilson for shares, Fisher for correlations,
+  Poisson for counts).
+- `scripts/explore.py` writes `exploration.json` for either config and refuses
+  sample data into any published folder.
+- The notebook now only calls and displays, and prints the run fingerprint and
+  data source in its first cell.
+- `test_the_notebook_was_run_on_real_data_with_the_current_config`: every code
+  cell executed, no errors, "REAL data", and the current config's fingerprint.
+  It fails on the notebook as committed until today.
+- Methodology §1.5 holds the findings table this log asked for on 1 Oct,
+  checked against both exploration.json files.
+
+#### The null decides the answer
+Against a league-average Poisson, 13 seasons show 1-1 **11.3% rarer** than
+independence. Against each match's own expected goals (a per-season ρ = 0
+fit), **+0.5%**. The deficit was team mixing, since a mixture of Poissons is
+not a Poisson. `test_league_mean_null_mistakes_team_mixing_for_a_low_score_effect`
+reproduces the trap on simulated data with ρ = 0. What survives: 0-1 rarer by
+12.7% [−21.7%, −3.5%], and ρ negative in 10 of 13 seasons (sign test p =
+0.046). That is partial support for the correction, consistent with the
+walk-forward fitting ρ near zero.
+
+#### Calibration error has a noise floor
+ECE is never zero on finite data. `ece_noise_floor` draws outcomes from a
+forecaster's own probabilities to get the ECE a perfectly calibrated one would
+score. Two consequences:
+- The closing line sits under its floor on both datasets: calibrated to within
+  what the data can show.
+- The model's Phase 4 ECE on 2 seasons, 0.061 on 341 matches, is under its
+  floor of about 0.080: the reliability diagram cannot show miscalibration
+  either way. `numbers.json` now records `ece_noise_floor_p95`, and the README
+  says so beside the chart.
+- An earlier draft of this session claimed "the market beats the model on
+  calibration". Withdrawn before it reached a document: the Phase 4
+  probabilities come from one end-of-data fit, which on 13 seasons, with the
+  minimum match weight, prices 2013 matches with 2024 strengths. A fair
+  comparison needs the walk-forward probabilities. That is the next item.
+
+Suite: **251 tests, 0 skipped** with data and generated outputs present.
+
+#### A test threshold set inside the noise
+`test_a_calibrated_market_scores_a_small_ece` failed at 6,000 matches with ECE
+0.0226 against a 0.02 threshold. Across seeds, a perfectly calibrated market
+scores 0.007–0.023 at that size, so the threshold was inside the noise. Fixed
+with 60,000 matches (floor ~0.003) and a threshold of 0.006, not by loosening
+the number until it passed.
+
 
 ### 2026-10-27 — Thirteen seasons, committed as a second result
 #### A minimum match weight: 67 minutes to 11
@@ -759,6 +818,8 @@ conclusion is unchanged and is the real argument for fractional Kelly: a model
 - Added `ipykernel` to requirements.txt (VS Code's Jupyter extension needs it).
 
 #### Findings from the real data — FILL IN after running the notebook
+*(Superseded 29 Oct 2026: measured by `scripts/explore.py`, quoted in
+methodology §1.5 and checked by tests. The table below stays as it was.)*
 | Measurement | Value | Expected / note |
 |---|---|---|
 | Outcome split H / D / A | | ~46 / 26 / 28 in top leagues |
