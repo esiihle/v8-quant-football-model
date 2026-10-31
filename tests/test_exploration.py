@@ -204,3 +204,20 @@ def test_sample_data_cannot_reach_a_published_folder(explore_script, monkeypatch
                                       "--out", str(REPO_ROOT / "docs" / "charts")])
     assert explore_script.main() == 1
     assert "REFUSED" in capsys.readouterr().out
+
+
+def test_the_notebook_runner_refuses_without_real_data(monkeypatch, capsys):
+    """scripts/run_notebook.py must not execute, let alone save, a notebook on
+    the bundled sample - the fault it was added to stop. [29 Oct 2026]"""
+    spec = importlib.util.spec_from_file_location(
+        "run_notebook", REPO_ROOT / "scripts" / "run_notebook.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    before = module.NOTEBOOK.read_bytes()
+    monkeypatch.setattr(module.ingest, "expected_raw_files",
+                        lambda config: [{"path": "data/raw/E0_9091.csv", "exists": False}])
+    monkeypatch.setattr(sys, "argv", ["run_notebook.py"])
+    assert module.main() == 1
+    assert "REFUSED" in capsys.readouterr().out
+    assert module.NOTEBOOK.read_bytes() == before

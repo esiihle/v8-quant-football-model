@@ -58,6 +58,22 @@ python scripts/make_charts.py      # regenerate every README chart + numbers.jso
 
 ## Session log
 
+### 2026-10-29 (later) — CI failed on the notebook test: a manual step, not code
+The 29 Oct commit failed CI on both Python versions with one test:
+`test_the_notebook_was_run_on_real_data_with_the_current_config` found
+"0 of 10 code cells have saved output". The notebook had been committed without
+its outputs: "Restart & Run All, then save" in the editor had not ended up in
+the file. Reproduced on a fresh clone with no data/raw (CI's condition): 250
+passed, that 1 failed, the sample pipeline step fine.
+
+The test was right, and what was fragile was the only step in the project done
+by clicking. `scripts/run_notebook.py` replaces it: a fresh kernel, cells in
+order, saved only if every cell succeeds, and refused outright when the real
+season files are missing. `nbclient==0.10.2` and `nbformat==5.10.4` are pinned
+in requirements.txt. `test_requirements_cover_everything_the_code_imports` would
+have failed CI again without them. Suite: 252 passed with no data folder.
+
+
 ### 2026-10-29 — The exploration notebook, finally run, and what it overturned
 The notebook carried since 1 Oct had in fact been run once, on the 12-match
 sample, and those outputs had been on GitHub for four weeks: a 58% home-win

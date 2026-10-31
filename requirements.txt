@@ -11,3 +11,9 @@ pytest==8.3.3
 # Notebooks (Phase 0 exploration onwards). VS Code's Jupyter extension needs a
 # kernel in this environment; ipykernel is that kernel.
 ipykernel==6.29.5
+
+# Running the exploration notebook from the command line
+# (scripts/run_notebook.py, added 29 Oct 2026). Same as Restart & Run All in
+# an editor, but a command: its saved outputs are held by a test.
+nbclient==0.10.2
+nbformat==5.10.4
