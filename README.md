@@ -4,7 +4,7 @@
 
 ![tests](https://github.com/esiihle/v8-quant-football-model/actions/workflows/tests.yml/badge.svg)
 ![python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
-![tests count](https://img.shields.io/badge/tests-264-brightgreen)
+![tests count](https://img.shields.io/badge/tests-265-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 ---
@@ -177,7 +177,7 @@ removes it. `test_pairing_is_what_makes_the_comparison_precise` shows the paired
 interval is less than half as wide.
 
 On 13 seasons the model's home-win calibration error (0.0237) is also above
-the 0.0212 that a perfectly calibrated forecaster would reach by chance on
+the 0.0213 that a perfectly calibrated forecaster would reach by chance on
 those matches, so the model is detectably miscalibrated. Both markets sit under
 their floors.
 
@@ -400,7 +400,7 @@ Every component is a transferable quant/credit-risk technique:
 
 ```
 src/            ingest, features, dixon_coles, calibrate, staking, backtest, clv, metrics, exploration, benchmark
-tests/          264 tests; the fragile numerics and every bug above
+tests/          265 tests; the fragile numerics and every bug above
 scripts/        run_pipeline.py · make_charts.py · simulation_study.py · verify_raw_data.py
                 rebuild_raw_from_mirrors.py · explore.py · run_notebook.py
 configs/        epl_2012_2025.yaml (the 13-season run; extends config.yaml)

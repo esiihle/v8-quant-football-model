@@ -731,11 +731,27 @@ BENCH_KEYS = [f"bench_{rule}_vs_{market}{suffix}"
               for suffix in ("", "_low", "_high")]
 
 
-def assert_quoted_plain(text, value, label, places=4):
-    """Log-loss and Brier are plain decimals, not percentages: quoted to four
-    places, with a typographic minus or plus as the README writes them."""
-    shown = f"{value:+.{places}f}".replace("-", "−")
-    assert shown in text, f"the README does not quote {label} = {shown}"
+# Plain decimals (log-loss, Brier, ECE) are matched within two units of the
+# fourth decimal place - the same idea as TOLERANCE for percentages.
+# [5 Nov 2026] The first version matched the exact text, which was stricter
+# than every other docs check, and it failed CI on its first commit: the
+# author's Windows run gave an ECE noise floor of 0.0213, the build machine's
+# Linux run 0.0212. Platform floating point moves the model's probabilities in
+# the last digits, and a simulated quantile moves with them.
+PLAIN_TOLERANCE = 0.0002
+
+
+def quoted_plain_decimals(text):
+    """Every number written with exactly four decimals, sign included."""
+    found = re.findall(r"([+\-−]?)(\d+\.\d{4})(?!\d)", text)
+    return [float(number) * (-1 if sign in ("-", "−") else 1) for sign, number in found]
+
+
+def assert_quoted_plain(text, value, label):
+    """The README must quote `value` to four decimals, within PLAIN_TOLERANCE."""
+    assert any(abs(candidate - value) <= PLAIN_TOLERANCE
+               for candidate in quoted_plain_decimals(text)), (
+        f"the README does not quote {label} = {value:+.4f} from numbers.json")
 
 
 @pytest.mark.parametrize("which", ["headline", "long run"])
@@ -754,7 +770,7 @@ def test_readme_quotes_the_model_vs_market_comparison(readme, numbers, which):
     if which == "long run":
         # The calibration claim: the model's ECE and the floor it is read against.
         for key in ("bench_model_ece", "bench_model_ece_floor_p95"):
-            assert f"{recorded[key]:.4f}" in readme, f"long run: {key}"
+            assert_quoted_plain(readme, recorded[key], f"long run: {key}")
         detectable = recorded["bench_model_ece"] > recorded["bench_model_ece_floor_p95"]
         assert ("detectably miscalibrated" in collapse(readme)) == detectable
 
@@ -765,3 +781,16 @@ def test_readme_says_the_market_wins_only_while_the_data_does(readme, numbers):
     all_market = all(numbers[f"bench_{rule}_vs_{market}_verdict"] == "market better"
                      for rule in ("log_loss", "brier") for market in ("opening", "closing"))
     assert claims == all_market
+
+
+
+def test_plain_decimal_matching_tolerates_last_digits_only():
+    """Two units in the fourth decimal pass; a genuinely different figure does
+    not; and the sign is read, including the typographic minus."""
+    text = "floor 0.0212, difference −0.0248 and +0.0311"
+    assert_quoted_plain(text, 0.0213, "floor")
+    assert_quoted_plain(text, -0.0247, "difference")
+    with pytest.raises(AssertionError):
+        assert_quoted_plain(text, 0.0230, "a different floor")
+    with pytest.raises(AssertionError):
+        assert_quoted_plain(text, 0.0248, "the wrong sign")

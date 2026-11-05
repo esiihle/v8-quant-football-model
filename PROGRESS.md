@@ -57,6 +57,19 @@ python scripts/make_charts.py      # regenerate every README chart + numbers.jso
 
 ## Session log
 
+### 2026-11-05 (later) — CI failed on one figure, and the test was too strict
+Commit f4790c7 failed one docs test: the README quoted the long run's ECE noise
+floor as 0.0212 (build machine) where the author's committed numbers.json says
+0.0213. Reproduced from that commit: 263 passed, 1 failed. The conclusion
+(model ECE 0.0237 above its floor) holds either way.
+
+The cause was the new check, not the number. Percentages have always been
+matched within TOLERANCE, which is why cross-machine last digits never broke
+them; the new plain-decimal check matched exact text. It now uses
+PLAIN_TOLERANCE = 0.0002, with a test that it still catches a different figure
+and a wrong sign. The README quotes the author's 0.0213.
+
+
 ### 2026-11-05 — The model against the market, on the same matches
 Last commit (5709b5d) reproduced under CI conditions first: a fresh clone with
 no data/raw gives 252 passed, and the sample pipeline runs.
@@ -80,7 +93,8 @@ clear of zero. 13 seasons, 4,722 matches: log-loss vs opening +0.0248
 [+0.0188, +0.0308], vs closing +0.0284 [+0.0220, +0.0347]. The opening line is
 the fair comparison (about the same information time), and the model still
 loses. On 13 seasons the model's home-win ECE (0.0237) is above its floor
-(0.0212), so it is detectably miscalibrated, and both markets are under theirs.
+(0.0213 on the author's machine), so it is detectably miscalibrated, and both
+markets are under theirs.
 This is the CLV verdict from the other side.
 
 #### A test that was wrong, not the code
