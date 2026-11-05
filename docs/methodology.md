@@ -787,6 +787,44 @@ It does not mean no edge.
 
 Reporting this rather than tuning until it looks better is the deliverable.
 
+
+### 6.6 The model against the market, on the same matches *(added 5 Nov 2026)*
+
+CLV measures whether the model's bets anticipate the market. A more direct
+question is whether its *probabilities* beat the market's. Three things make
+that comparison fair, and each one was missing before:
+
+1. **The same matches.** `walk_forward` now returns `priced`: the model's
+   out-of-sample probabilities for every match it priced, bet or not.
+   Previously only the bets survived, so the only full set of model
+   probabilities was Phase 4's single end-of-data fit, which had seen the
+   results it was scored on.
+2. **The market de-vigged with the pipeline's own method** (Shin), so the
+   margin is not counted against it. Two benchmarks: the opening price (the
+   market's view at about the model's time) and the closing price (its best
+   estimate).
+3. **A paired bootstrap over matches.** For each match $i$,
+   $d_i = L_i^{\text{model}} - L_i^{\text{market}}$, and the interval is for
+   $\bar d$, resampling matches with their two scores together. Log-loss
+   varies mostly between matches, so
+   $\operatorname{Var}(\bar d) = (\sigma_m^2 + \sigma_k^2 - 2\rho\sigma_m\sigma_k)/n$
+   is far smaller than the unpaired $(\sigma_m^2 + \sigma_k^2)/n$ when the
+   correlation $\rho$ between the two forecasters' scores is high.
+
+The result, on both datasets, is that the market is better on both scoring
+rules against both books, with every interval clear of zero (README for the
+figures, checked by `tests/test_docs.py`). On 13 seasons the model's home-win
+calibration error is also above its noise floor, so it is detectably
+miscalibrated, while both markets are not.
+
+**A test that failed for the right reason.** The first test that two equally
+good forecasters are "not told apart" used one seed, and that seed gave "model
+better". A 95% interval excludes zero 5% of the time when the null is true:
+that is its definition. Across 20 seeds the mean difference was +0.0002 and no
+seed gave a false positive. The test now checks the false-positive *rate*
+over 20 fixed seeds (`test_equal_forecasters_are_rarely_told_apart`). A null
+test on a single seed fails one run in twenty by construction.
+
 ## 7. Hardening & reproducibility  *(built 20 Oct 2026)*
 
 Phases 1–6 built a model. Phase 7 makes the claim *"these are the numbers this

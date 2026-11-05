@@ -10,9 +10,8 @@ Every figure in README and methodology is checked against its `numbers.json`.
 **Overall status:** 🟢 All stages built and run on real data; see the latest
 entry for the test count. CI runs the suite and a full pipeline run on two
 Python versions.
-**Next action:** A fair model-vs-market calibration comparison on the
-model's walk-forward probabilities (see 29 Oct), then `docs/STUDY_GUIDE.md`,
-then the slide deck.
+**Next action:** `docs/STUDY_GUIDE.md` (stage by stage, real code quoted,
+trade-off boxes, maths derived, interview drill), then the slide deck.
 **Schedule:** baselined from 28 Sep 2026; target presentation **18 Dec 2026**.
 **Cadence:** one commit per working day (missed 29 Sep — first and last).
 
@@ -57,6 +56,42 @@ python scripts/make_charts.py      # regenerate every README chart + numbers.jso
 ---
 
 ## Session log
+
+### 2026-11-05 — The model against the market, on the same matches
+Last commit (5709b5d) reproduced under CI conditions first: a fresh clone with
+no data/raw gives 252 passed, and the sample pipeline runs.
+
+#### What was built
+- `walk_forward` now returns `priced`: the model's out-of-sample probabilities
+  for every match it priced, not only the bets. Bet counts and every existing
+  figure are unchanged (433 and 4,310 on the build machine).
+- `src/benchmark.py`: model, opening market (Bet365) and closing market
+  (Pinnacle), the markets de-vigged with Shin, scored match by match on
+  log-loss and Brier. Paired bootstrap over matches, a verdict per comparison,
+  and home-win ECE against its noise floor.
+- In `numbers.json` (`bench_*`) for both runs, printed by `run_pipeline.py`,
+  quoted in the README, and checked by three docs tests, including one tying
+  "the market's probabilities are better than the model's" to the verdicts.
+- 9 tests in `tests/test_benchmark.py` on forecasters of known quality.
+
+#### The result
+The market is better on all four comparisons on both datasets, every interval
+clear of zero. 13 seasons, 4,722 matches: log-loss vs opening +0.0248
+[+0.0188, +0.0308], vs closing +0.0284 [+0.0220, +0.0347]. The opening line is
+the fair comparison (about the same information time), and the model still
+loses. On 13 seasons the model's home-win ECE (0.0237) is above its floor
+(0.0212), so it is detectably miscalibrated, and both markets are under theirs.
+This is the CLV verdict from the other side.
+
+#### A test that was wrong, not the code
+"Equal forecasters are not told apart" failed on its one seed with "model
+better". Across 20 seeds: mean difference +0.0002, 0 false positives. A 95%
+interval rejects a true null 5% of the time by definition, so a single-seed
+null test fails one run in twenty. It now checks the false-positive rate over
+20 fixed seeds.
+
+Suite: **264 tests**, passing with and without data/raw.
+
 
 ### 2026-10-29 (later) — CI failed on the notebook test: a manual step, not code
 The 29 Oct commit failed CI on both Python versions with one test:

@@ -4,7 +4,7 @@
 
 ![tests](https://github.com/esiihle/v8-quant-football-model/actions/workflows/tests.yml/badge.svg)
 ![python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
-![tests count](https://img.shields.io/badge/tests-252-brightgreen)
+![tests count](https://img.shields.io/badge/tests-264-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 ---
@@ -145,6 +145,41 @@ The simulation study above shows how to read this. The pipeline detects a
 mispricing of about 5 probability points on 760 matches, so a market movement
 of +0.02% means *no edge large enough to detect*. A real edge smaller than
 that remains possible, and settling it needs more seasons.
+
+### Are the model's probabilities better than the market's?
+
+CLV asks whether the model finds prices the market later corrects. The prior
+question is simpler: on the same matches, whose probabilities are better? The
+walk-forward keeps the model's out-of-sample probabilities for **every** match
+it priced, not just the ones it bet on. `src/benchmark.py` scores them against
+both markets, de-vigged with the same Shin method, match by match. Both scores
+are losses, so a positive difference means the market did better.
+
+| model minus market, paired over matches | 2 seasons, 552 matches | 13 seasons, 4,722 matches |
+|---|---|---|
+| log-loss vs opening (Bet365) | +0.0246 [+0.0060, +0.0434] | +0.0248 [+0.0188, +0.0308] |
+| Brier vs opening | +0.0179 [+0.0060, +0.0298] | +0.0169 [+0.0129, +0.0209] |
+| log-loss vs closing (Pinnacle) | +0.0311 [+0.0120, +0.0502] | +0.0284 [+0.0220, +0.0347] |
+| Brier vs closing | +0.0230 [+0.0111, +0.0356] | +0.0192 [+0.0149, +0.0234] |
+
+**The market's probabilities are better than the model's**, on both scoring
+rules and against both books, with every interval clear of zero. The opening
+line is the fair comparison, since it is the market's view at about the same
+time as the model's, and the model still loses. It is the CLV finding seen
+from the other side: the model's disagreements with the market are not
+information the market lacks, and on average the market's view is the better
+one.
+
+The test is **paired**: each match's two scores stay together when the
+bootstrap resamples. An upset is costly for every forecaster, so most of the
+variation in log-loss is between matches, not between forecasters, and pairing
+removes it. `test_pairing_is_what_makes_the_comparison_precise` shows the paired
+interval is less than half as wide.
+
+On 13 seasons the model's home-win calibration error (0.0237) is also above
+the 0.0212 that a perfectly calibrated forecaster would reach by chance on
+those matches, so the model is detectably miscalibrated. Both markets sit under
+their floors.
 
 ### Calibration and bankroll
 
@@ -364,8 +399,8 @@ Every component is a transferable quant/credit-risk technique:
 ## Repository structure
 
 ```
-src/            ingest, features, dixon_coles, calibrate, staking, backtest, clv, metrics, exploration
-tests/          252 tests; the fragile numerics and every bug above
+src/            ingest, features, dixon_coles, calibrate, staking, backtest, clv, metrics, exploration, benchmark
+tests/          264 tests; the fragile numerics and every bug above
 scripts/        run_pipeline.py · make_charts.py · simulation_study.py · verify_raw_data.py
                 rebuild_raw_from_mirrors.py · explore.py · run_notebook.py
 configs/        epl_2012_2025.yaml (the 13-season run; extends config.yaml)

@@ -45,7 +45,8 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from src.config import load_config, set_seed
 from src import (ingest, features, dixon_coles, calibrate, staking,
-                 backtest, clv, metrics, logging_setup, exploration)
+                 backtest, clv, metrics, logging_setup, exploration,
+                 benchmark)
 
 
 # --- The chart manifest ----------------------------------------------------
@@ -642,6 +643,23 @@ def gather(config, use_sample, verbose=False):
         print("  walk-forward backtest (the slow part)")
         walk = backtest.walk_forward(matches, config, progress=verbose)
         bet_history = walk["bets"]
+
+        # Model vs market on every priced match [added 5 Nov 2026]. Recorded
+        # whether or not any bets were placed: a model that never bets can
+        # still be compared with the market.
+        if len(walk.get("priced", [])):
+            versus = benchmark.compare(walk["priced"], config)
+            numbers["bench_matches"] = versus["matches"]
+            for name, scores in versus["forecasters"].items():
+                numbers[f"bench_{name}_log_loss"] = scores["log_loss"]
+                numbers[f"bench_{name}_brier"] = scores["brier"]
+                numbers[f"bench_{name}_ece"] = scores["ece_home"]
+                numbers[f"bench_{name}_ece_floor_p95"] = scores["ece_home_floor_p95"]
+            for key, d in versus["differences"].items():
+                numbers[f"bench_{key}"] = d["estimate"]
+                numbers[f"bench_{key}_low"] = d["lower"]
+                numbers[f"bench_{key}_high"] = d["upper"]
+                numbers[f"bench_{key}_verdict"] = d["verdict"]
         if len(bet_history):
             walk_ledger, walk_summary = staking.simulate_bankroll(bet_history, config)
             numbers["walk_forward_bets"] = walk_summary["bets"]

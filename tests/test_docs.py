@@ -722,3 +722,46 @@ def test_readme_reads_the_reliability_diagram_against_its_noise_floor(readme, nu
     claims_undetectable = "cannot\nshow miscalibration" in readme or \
         "cannot show miscalibration" in collapse(readme)
     assert claims_undetectable == (not numbers["ece_detectable"])
+
+
+# --- Added 5 Nov 2026: model vs market, held to numbers.json ----------------
+
+BENCH_KEYS = [f"bench_{rule}_vs_{market}{suffix}"
+              for rule in ("log_loss", "brier") for market in ("opening", "closing")
+              for suffix in ("", "_low", "_high")]
+
+
+def assert_quoted_plain(text, value, label, places=4):
+    """Log-loss and Brier are plain decimals, not percentages: quoted to four
+    places, with a typographic minus or plus as the README writes them."""
+    shown = f"{value:+.{places}f}".replace("-", "−")
+    assert shown in text, f"the README does not quote {label} = {shown}"
+
+
+@pytest.mark.parametrize("which", ["headline", "long run"])
+def test_readme_quotes_the_model_vs_market_comparison(readme, numbers, which):
+    recorded = numbers
+    if which == "long run":
+        path = LONG_RUN_DIR / "numbers.json"
+        if not path.exists():
+            pytest.skip("long run not generated")
+        recorded = json.loads(path.read_text())
+    if "bench_matches" not in recorded:
+        pytest.fail(f"{which} numbers.json predates the comparison: rerun make_charts.py")
+    assert f"{recorded['bench_matches']:,} matches" in readme
+    for key in BENCH_KEYS:
+        assert_quoted_plain(readme, recorded[key], f"{which}: {key}")
+    if which == "long run":
+        # The calibration claim: the model's ECE and the floor it is read against.
+        for key in ("bench_model_ece", "bench_model_ece_floor_p95"):
+            assert f"{recorded[key]:.4f}" in readme, f"long run: {key}"
+        detectable = recorded["bench_model_ece"] > recorded["bench_model_ece_floor_p95"]
+        assert ("detectably miscalibrated" in collapse(readme)) == detectable
+
+
+def test_readme_says_the_market_wins_only_while_the_data_does(readme, numbers):
+    """The prose verdict may not outlive the numbers behind it."""
+    claims = "the market's probabilities are better than the model's" in collapse(readme).lower()
+    all_market = all(numbers[f"bench_{rule}_vs_{market}_verdict"] == "market better"
+                     for rule in ("log_loss", "brier") for market in ("opening", "closing"))
+    assert claims == all_market

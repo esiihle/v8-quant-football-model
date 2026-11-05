@@ -165,6 +165,7 @@ def walk_forward(matches, config=None, progress=False):
                             freq=f"{refit_days}D")
 
     all_bets = []
+    all_priced = []          # every priced match, bet or not [5 Nov 2026]
     window_log = []
     counts = {"windows": 0, "windows_skipped_no_fit": 0,
               "matches_priced": 0, "matches_unpriceable": 0}
@@ -230,6 +231,20 @@ def walk_forward(matches, config=None, progress=False):
             if column in window.columns:
                 priced[column] = window[column].to_numpy()
 
+        # --- Keep every priced match, not just the bets [added 5 Nov 2026] -
+        # A fair comparison with the market needs the model's probabilities on
+        # EVERY match it priced, out of sample, exactly as staking saw them.
+        # Before this, only the matches that became bets survived the loop, so
+        # the only full set of model probabilities was Phase 4's single
+        # end-of-data fit - which had seen the results it was being scored on.
+        kept = [c for c in ("MatchID", "MatchDate", "HomeTeam", "AwayTeam",
+                            "KnownTeams", "home_win", "draw", "away_win",
+                            "OddsH", "OddsD", "OddsA", "CloseH", "CloseD",
+                            "CloseA", "Result") if c in priced.columns]
+        record = priced[kept].copy()
+        record["window_start"] = window_start
+        all_priced.append(record)
+
         # --- Stake --------------------------------------------------------
         bets = staking.find_value_bets(priced, config)
         counts["matches_priced"] += len(window)
@@ -272,9 +287,12 @@ def walk_forward(matches, config=None, progress=False):
 
     history = (pd.concat(all_bets, ignore_index=True) if all_bets
                else pd.DataFrame())
+    priced_history = (pd.concat(all_priced, ignore_index=True) if all_priced
+                      else pd.DataFrame())
 
     return {
         "bets": history,
+        "priced": priced_history,
         "windows": pd.DataFrame(window_log),
         "counts": counts,
         "settings": {

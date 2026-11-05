@@ -34,6 +34,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from src.config import load_config, set_seed
 from src import logging_setup
 from src import (
+    benchmark,
     ingest,
     features,
     dixon_coles,
@@ -247,6 +248,11 @@ def main():
     print("Stage 6 — Walk-forward backtest, CLV and headline metrics")
     try:
         walk = backtest.walk_forward(matches, config, progress=args.verbose)
+
+        # The model against the market on every priced match [5 Nov 2026].
+        if len(walk.get("priced", [])):
+            print(benchmark.benchmark_report(benchmark.compare(walk["priced"], config)))
+            print()
 
         if walk["bets"].empty:
             print(backtest.backtest_report(walk))
