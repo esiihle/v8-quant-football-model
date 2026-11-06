@@ -56,6 +56,19 @@ python scripts/make_charts.py      # regenerate every README chart + numbers.jso
 
 ## Session log
 
+### 2026-11-06 (later) — Wrap-up: the planning documents brought up to date
+Last commit (5d26d81) reproduced under CI conditions: 268 passed, sample
+pipeline fine. OVERVIEW.md and ROADMAP.md had not changed since 30 Sep and
+still read as future plans, and no test covered them.
+- ROADMAP.md: an outcome table above the original plan, with planned window,
+  actual date and an honest done-when assessment for each phase. Phase 4 is
+  partly met (calibration helped on 13 seasons, not 2) and Phase 8 has the
+  slide deck outstanding. A test requires every actual date to be a session
+  heading in this log.
+- OVERVIEW.md: a status note pointing to where the as-built answers live, and
+  the definition of done assessed item by item. The original text is kept.
+
+
 ### 2026-11-06 — The study guide
 Last commit (08dc0e8) reproduced under CI conditions first: 265 passed.
 

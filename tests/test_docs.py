@@ -842,3 +842,19 @@ def test_the_study_guide_quotes_the_long_run_as_generated():
     for key in BENCH_KEYS:
         assert_quoted_plain(text, recorded[key], f"study guide, long run: {key}")
     assert f"{recorded['bench_matches']:,} matches" in text
+
+
+
+# --- Added 6 Nov 2026: the roadmap's "actual" dates are the record's dates --
+
+def test_every_actual_date_in_the_roadmap_is_a_session_in_the_progress_log():
+    """Plan-against-actual is only honest if "actual" comes from the record.
+    Each date in the outcome table must be a session heading in PROGRESS.md."""
+    roadmap = (REPO_ROOT / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
+    progress = (REPO_ROOT / "PROGRESS.md").read_text(encoding="utf-8")
+    table = roadmap.split("## Outcome", 1)[1].split("## Planning assumptions", 1)[0]
+    dates = re.findall(r"\|\s*(\d{4}-\d{2}-\d{2})", table)
+    assert len(dates) == 9, f"expected one actual date per phase, found {len(dates)}"
+    sessions = set(re.findall(r"^### (\d{4}-\d{2}-\d{2})", progress, re.MULTILINE))
+    missing = [d for d in dates if d not in sessions]
+    assert not missing, f"ROADMAP cites dates with no PROGRESS.md session: {missing}"

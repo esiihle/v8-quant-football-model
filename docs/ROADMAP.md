@@ -4,6 +4,35 @@
 > centrepiece of the initial commit — a public commitment to a schedule and a
 > definition of done for every phase.
 
+## Outcome: plan against actual *(added 6 Nov 2026)*
+
+The plan below is kept as written on 30 Sep, because a schedule only means
+something if it can be compared with what happened. The dates under "actual"
+are the session headings in `PROGRESS.md`, where each phase's work is recorded.
+
+| Phase | Planned window | Actual | Done-when, honestly assessed |
+|---|---|---|---|
+| 0 Foundations | Sep 28 – Oct 4 | 2026-09-28 | Met: a fresh clone runs the pipeline (CI does this on every push) |
+| 1 Data pipeline | Oct 5 – Oct 18 | 2026-10-02 | Met: malformed input fails loudly; plus a cross-mirror audit added 23 Oct |
+| 2 Features | Oct 19 – Nov 1 | 2026-10-09 | Met |
+| 3 Dixon-Coles | Nov 2 – Nov 15 | 2026-10-10 | Met: multi-start convergence and parameter recovery, after two optimiser bugs |
+| 4 Calibration | Nov 16 – Nov 22 | 2026-10-13 | **Partly met**: calibration improved the model out of sample on 13 seasons, not on 2. Reported, not tuned |
+| 5 Staking | Nov 23 – Nov 29 | 2026-10-14 | Met |
+| 6 Backtest & CLV | Nov 30 – Dec 6 | 2026-10-18 | Met: lookahead guard on every window; CLV with intervals and decomposition |
+| 7 Hardening | Dec 7 – Dec 13 | 2026-10-20 | Met, with one qualification: exact reproduction holds per machine; across platforms, to the reported precision (methodology §7.3) |
+| 8 Docs & presentation | Dec 14 – Dec 20 | 2026-10-21 onward | README, methodology, exploration and STUDY_GUIDE.md done; **slide deck outstanding** |
+
+**What the plan did not foresee**, and took the time it saved: the data source
+being blocked (solved 23 Oct by rebuilding from two mirrors), every published
+number having to be regenerated and re-verified (22–25 Oct), validating the
+validator with a calibrated simulation study (23–26 Oct), a 13-season second
+result (27 Oct), and a direct model-versus-market comparison (5 Nov).
+
+The build ran about six weeks ahead of the baseline. The 18 December
+presentation date stands.
+
+---
+
 ## Planning assumptions
 
 - **Inception:** 28 September 2026 (documentation committed 1 Sep; the build

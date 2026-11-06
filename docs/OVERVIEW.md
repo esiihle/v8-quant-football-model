@@ -1,5 +1,12 @@
 # Project Overview — V8 Quantitative Football Model
 
+> **Status, 6 Nov 2026.** This overview was written on 30 Sep, before any of
+> the build, and is kept as the original design statement. The project has
+> been built: for what it found, read the README; for how it works, read
+> `docs/methodology.md` and `docs/STUDY_GUIDE.md`; for plan against actual,
+> read the outcome table at the top of `docs/ROADMAP.md`. Section 7's
+> definition of done is assessed at the end of this file.
+
 > **Read this first.** This document is the orientation for anyone picking up the
 > project — a future collaborator, a recruiter, or myself in six months. It
 > explains *what* we are building, *why* it is built this way, and *how* the
@@ -140,6 +147,10 @@ The honesty layer:
 
 ## 6. Planned repository structure
 
+*As planned on 30 Sep. The as-built map, which has more modules than this
+(benchmark, exploration, canonical, config, logging) and more scripts, is in
+the README.*
+
 ```
 v8-quant-football-model/
 ├── README.md
@@ -184,3 +195,16 @@ The project is presentation-ready when:
   *talked about* as fluently as it can be run.
 
 See `ROADMAP.md` for the week-by-week plan to get there.
+
+### Assessed, 6 Nov 2026
+
+- [x] One command runs the full pipeline reproducibly from raw data to a
+      backtest report (`scripts/run_pipeline.py`, with a run fingerprint).
+- [x] The test suite is green and covers the fragile numerics, and CI runs it
+      on two Python versions with no data present.
+- [x] The README states the edge honestly, with intervals. It leads with the
+      simulation study rather than the CLV chart, because the real finding is
+      that there is no edge, and the simulation is what makes "no edge"
+      interpretable.
+- [x] A methodology write-up exists, and so does a study guide.
+- [ ] **A slide deck.** Outstanding.

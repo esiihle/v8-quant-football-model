@@ -4,7 +4,7 @@
 
 ![tests](https://github.com/esiihle/v8-quant-football-model/actions/workflows/tests.yml/badge.svg)
 ![python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
-![tests count](https://img.shields.io/badge/tests-268-brightgreen)
+![tests count](https://img.shields.io/badge/tests-269-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 ---
@@ -404,7 +404,7 @@ Every component is a transferable quant/credit-risk technique:
 
 ```
 src/            ingest, features, dixon_coles, calibrate, staking, backtest, clv, metrics, exploration, benchmark
-tests/          268 tests; the fragile numerics and every bug above
+tests/          269 tests; the fragile numerics and every bug above
 scripts/        run_pipeline.py · make_charts.py · simulation_study.py · verify_raw_data.py
                 rebuild_raw_from_mirrors.py · explore.py · run_notebook.py
 configs/        epl_2012_2025.yaml (the 13-season run; extends config.yaml)
