@@ -794,3 +794,51 @@ def test_plain_decimal_matching_tolerates_last_digits_only():
         assert_quoted_plain(text, 0.0230, "a different floor")
     with pytest.raises(AssertionError):
         assert_quoted_plain(text, 0.0248, "the wrong sign")
+
+
+# --- Added 6 Nov 2026: the study guide quotes real code and real numbers ----
+
+STUDY_GUIDE = REPO_ROOT / "docs" / "STUDY_GUIDE.md"
+SOURCE_BLOCK = re.compile(r"<!-- source: ([\w./-]+) -->\n```python\n(.*?)```", re.DOTALL)
+
+
+def test_every_code_block_in_the_study_guide_is_an_exact_excerpt():
+    """A study guide that quotes code which has since changed teaches the wrong
+    thing with complete confidence. Each block is tagged with its source file
+    and must appear in that file, character for character."""
+    text = STUDY_GUIDE.read_text(encoding="utf-8")
+    blocks = SOURCE_BLOCK.findall(text)
+    assert len(blocks) >= 12, f"expected the guide's code blocks, found {len(blocks)}"
+    untagged = text.count("```python") - len(blocks)
+    assert untagged == 0, f"{untagged} python block(s) have no <!-- source: --> tag"
+    for path, code in blocks:
+        source = (REPO_ROOT / path).read_text(encoding="utf-8")
+        assert code in source, (
+            f"STUDY_GUIDE.md quotes code that is no longer in {path}:\n{code}")
+
+
+def test_the_study_guide_quotes_the_headline_as_generated(numbers):
+    text = STUDY_GUIDE.read_text(encoding="utf-8")
+    for key in ("in_sample_roi", "in_sample_yield", "walk_forward_roi",
+                "walk_forward_yield", "walk_forward_yield_low", "walk_forward_yield_high",
+                "clv_points_mean", "clv_margin_paid", "clv_movement_mean",
+                "clv_movement_low", "clv_movement_high"):
+        assert_quoted(text, numbers[key], f"study guide: {key}")
+    assert f"{numbers['walk_forward_bets']} bets" in text
+    assert_quoted_plain(text, numbers["ece"], "study guide: model ECE")
+    assert_quoted_plain(text, numbers["ece_noise_floor_p95"], "study guide: ECE floor")
+    assert f"{numbers['ece_matches']} matches" in text
+
+
+def test_the_study_guide_quotes_the_long_run_as_generated():
+    path = LONG_RUN_DIR / "numbers.json"
+    if not path.exists():
+        pytest.skip("long run not generated")
+    recorded = json.loads(path.read_text())
+    text = STUDY_GUIDE.read_text(encoding="utf-8")
+    for key in ("clv_movement_mean", "clv_movement_low", "clv_movement_high",
+                "walk_forward_yield_low", "walk_forward_yield_high", "walk_forward_roi"):
+        assert_quoted(text, recorded[key], f"study guide, long run: {key}")
+    for key in BENCH_KEYS:
+        assert_quoted_plain(text, recorded[key], f"study guide, long run: {key}")
+    assert f"{recorded['bench_matches']:,} matches" in text

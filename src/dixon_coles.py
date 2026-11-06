@@ -226,9 +226,11 @@ def log_likelihood(params, home_idx, away_idx, home_goals, away_goals,
     with no evidence a team's parameters are pushed toward 0, which is exactly
     league average on this scale.
 
-    Returns ``+inf`` for any parameter set that produces a non-positive
-    probability, which keeps the optimiser out of invalid regions rather than
-    letting it chase a NaN.
+    For any parameter set that produces a non-positive probability it returns
+    a large FINITE penalty that grows with the size of the violation, never
+    ``+inf``: an infinite value breaks L-BFGS-B's finite-difference gradient
+    (see the comment in the body). [Docstring corrected 6 Nov 2026: until then
+    it still described the pre-10-Oct behaviour, returning ``+inf``.]
     """
     attack, defence, gamma, rho = _unpack(params, n_teams)
     lam, mu = expected_goals(attack, defence, gamma, home_idx, away_idx)

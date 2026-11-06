@@ -4,7 +4,7 @@
 
 ![tests](https://github.com/esiihle/v8-quant-football-model/actions/workflows/tests.yml/badge.svg)
 ![python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
-![tests count](https://img.shields.io/badge/tests-265-brightgreen)
+![tests count](https://img.shields.io/badge/tests-268-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 ---
@@ -247,6 +247,10 @@ opposite: model match outcomes rigorously, size bets sensibly, and **test any
 claimed edge the way a model-validation function would** — out of time, with
 confidence intervals, against a benchmark that cannot be gamed.
 
+**Preparing to discuss this project?** [`docs/STUDY_GUIDE.md`](docs/STUDY_GUIDE.md)
+walks through every stage with the real code, the maths derived, the trade-offs,
+the bugs, and interview questions with answers.
+
 ## What the data looks like
 
 Before any modelling, `notebooks/01_exploration.ipynb` measures what the model
@@ -400,11 +404,11 @@ Every component is a transferable quant/credit-risk technique:
 
 ```
 src/            ingest, features, dixon_coles, calibrate, staking, backtest, clv, metrics, exploration, benchmark
-tests/          265 tests; the fragile numerics and every bug above
+tests/          268 tests; the fragile numerics and every bug above
 scripts/        run_pipeline.py · make_charts.py · simulation_study.py · verify_raw_data.py
                 rebuild_raw_from_mirrors.py · explore.py · run_notebook.py
 configs/        epl_2012_2025.yaml (the 13-season run; extends config.yaml)
-docs/           methodology.md · OVERVIEW.md · ROADMAP.md · charts/
+docs/           methodology.md · STUDY_GUIDE.md · OVERVIEW.md · ROADMAP.md · charts/
 notebooks/      exploration
 .github/        CI: pytest + a full pipeline run, on Python 3.11 and 3.12
 ```

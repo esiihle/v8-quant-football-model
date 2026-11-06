@@ -10,8 +10,7 @@ Every figure in README and methodology is checked against its `numbers.json`.
 **Overall status:** 🟢 All stages built and run on real data; see the latest
 entry for the test count. CI runs the suite and a full pipeline run on two
 Python versions.
-**Next action:** `docs/STUDY_GUIDE.md` (stage by stage, real code quoted,
-trade-off boxes, maths derived, interview drill), then the slide deck.
+**Next action:** The slide deck, built from STUDY_GUIDE.md's pitch and drills.
 **Schedule:** baselined from 28 Sep 2026; target presentation **18 Dec 2026**.
 **Cadence:** one commit per working day (missed 29 Sep — first and last).
 
@@ -56,6 +55,33 @@ python scripts/make_charts.py      # regenerate every README chart + numbers.jso
 ---
 
 ## Session log
+
+### 2026-11-06 — The study guide
+Last commit (08dc0e8) reproduced under CI conditions first: 265 passed.
+
+`docs/STUDY_GUIDE.md`: twelve sections, ingest to reproducibility. Each has
+what the stage does, the real code quoted, the maths derived, a trade-off
+box, the bug story and an interview drill. It also has a 30-second pitch, a
+V8-to-credit-risk mapping table, the eleven bugs as one story, and five hard
+questions.
+
+- **Code cannot drift.** Every python block carries a `<!-- source: path -->`
+  tag and must appear character for character in that file
+  (`test_every_code_block_in_the_study_guide_is_an_exact_excerpt`). Checked by
+  editing one quoted line of staking.py: the test failed.
+- **Figures cannot drift.** Headline and long-run figures in the guide are
+  checked against both numbers.json files, as the README is.
+- **Maths checked numerically, not only derived.** τ conserves probability
+  (score matrix sums to 1.0, 0-0 up and 1-0 down for ρ < 0). Quarter Kelly
+  keeps 44.5% of growth on a 40% bet at 3.0, against the quadratic
+  approximation's 43.75%, and double Kelly's growth is +0.0007, roughly zero
+  rather than exactly. The guide now says so.
+- **Found while writing it:** `log_likelihood`'s docstring still said it
+  returned `+inf` for invalid parameters, the behaviour bug #2 removed on 10
+  Oct. Corrected.
+
+Suite: **268 tests**.
+
 
 ### 2026-11-05 (later) — CI failed on one figure, and the test was too strict
 Commit f4790c7 failed one docs test: the README quoted the long run's ECE noise
