@@ -1,4 +1,4 @@
-# Methodology — V8 Quantitative Football Model
+# Methodology: V8 Quantitative Football Model
 
 > **Living document.** This is the mathematical spine of the project. It is
 > scaffolded now and filled in as each phase lands (see `ROADMAP.md`). Each
@@ -9,7 +9,6 @@
 ---
 
 ## 1. Notation & data
-**Status: 🟡 skeleton — finalised in Phase 1.**
 
 - Matches indexed by $m$; home/away goals $x_m, y_m$; match date $t_m$.
 - Teams indexed by $i$; each team has an **attack** parameter $\alpha_i$ and a
@@ -23,13 +22,13 @@
 `https://www.football-data.co.uk/mmz4281/{season}/{league}.csv`. It was chosen
 over alternatives for one decisive reason: it publishes **both pre-match and
 closing odds** in the same file. Closing odds are what make closing-line value
-measurable, and CLV is the headline claim of this project — a source without
+measurable, and CLV is the headline claim of this project, a source without
 them would quietly remove the project's main result.
 
 **Coverage at present:** English Premier League (`E0`), seasons 2023/24 and
 2024/25. One league first, to prove the pipeline end to end before scaling out.
 
-### 1.2 Fields we rely on
+### 1.2 Fields V8 relies on
 
 | Group | Columns | Used for |
 |---|---|---|
@@ -41,7 +40,7 @@ them would quietly remove the project's main result.
 
 Everything else in the file (half-time scores, cards, corners, referee, the
 other bookmakers, Asian handicap lines) is carried through untouched for now and
-either used or dropped explicitly in Phase 1 — never dropped by accident.
+either used or dropped explicitly in Phase 1, never dropped by accident.
 
 ### 1.3 Known quirks of the source
 
@@ -51,7 +50,7 @@ Observed when loading the real files, and handled in `src/ingest.py`:
   in others, so dates are parsed with `dayfirst=True, format="mixed"`.
 - **Trailing empty columns and rows** appear in several files (spreadsheet
   padding) and are dropped on load.
-- **Column sets differ between seasons** — a column present in one season may be
+- **Column sets differ between seasons**: a column present in one season may be
   absent in another, which shows up as a block of nulls exactly the size of one
   season. The shape report surfaces this rather than hiding it.
 - **Occasional missing odds** on individual matches; these rows are simply not
@@ -77,7 +76,7 @@ Rules applied, each counted in the data-quality report:
 | Goals impossible (<0 or >15) | row dropped | a data error, not a result |
 | `FTR` disagrees with the goals | **result recomputed**, mismatch counted | goals are the primary record |
 | Team name has stray whitespace | trimmed | otherwise one team becomes two |
-| Odds outside 1.01–1000 | price voided (NaN), row kept | the match still trains the model; it just isn't bettable |
+| Odds outside 1.01-1000 | price voided (NaN), row kept | the match still trains the model; it just isn't bettable |
 | Same date + same two teams | duplicate dropped | otherwise that match is double-counted in the likelihood |
 | More than 5% of rows unusable | run stops | quiet degradation is worse than a loud failure |
 
@@ -96,7 +95,7 @@ seasons) and `docs/charts/epl_2012_2025/exploration.json` (13 seasons). The
 functions are in `src/exploration.py`, and `notebooks/01_exploration.ipynb`
 displays them with charts. Intervals are 95%.
 
-| measurement | 2023–25 (760 matches) | 2012–25 (4,940 matches) |
+| measurement | 2023-25 (760 matches) | 2012-25 (4,940 matches) |
 |---|---|---|
 | home / draw / away | 43.4% / 23.0% / 33.6% | 44.7% / 23.6% / 31.7% |
 | home win, interval | [39.9%, 47.0%] | [43.3%, 46.1%] |
@@ -172,7 +171,7 @@ to repeat.
 Relative to the league, where 1.0 is exactly average: attack 1.25 means a quarter
 more goals than a typical team; defence 0.80 means a fifth fewer conceded (lower
 is better). Home and away appearances are pooled, because home advantage is a
-separate parameter fitted in Phase 3 — folding it in here would count it twice.
+separate parameter fitted in Phase 3; folding it in here would count it twice.
 
 ### 2.2 Bayesian shrinkage
 
@@ -183,7 +182,7 @@ with $k$ = `features.shrinkage_k` (currently 8). A team with 0 matches is given
 the prior exactly; with 8 it sits halfway; with 38 it is 83% its own record.
 Trust is earned gradually, with no threshold to argue about.
 
-$n_i$ is the **effective** sample size — the sum of time-decay weights, not a row
+$n_i$ is the **effective** sample size, the sum of time-decay weights, not a row
 count. Ten matches from last season carry far less than ten matches' worth of
 evidence, and the shrinkage should know that.
 
@@ -192,7 +191,7 @@ treatment in credit risk: same formula, same argument, different quantity.
 
 ### 2.3 Expected-goals proxy
 
-Goals are the truth but are rare and noisy — a 1-0 win and a 1-0 loss look
+Goals are the truth but are rare and noisy: a 1-0 win and a 1-0 loss look
 identical in the table and nothing alike on the pitch. Shots on target are far
 more plentiful. The feature blends them:
 
@@ -200,7 +199,7 @@ more plentiful. The feature blends them:
 
 with $w$ = `features.xg_weight` (currently 0.5). The conversion rate is measured
 **from past matches only**, separately for home and away sides, so it reflects
-this league and era rather than a constant from a paper — and so that home
+this league and era rather than a constant from a paper, and so that home
 advantage is not smuggled in a second time.
 
 Where shot data is absent (the bundled sample, some older seasons), the feature
@@ -213,10 +212,10 @@ $$w(\Delta t) = 0.5^{\,\Delta t / H}$$
 
 with $H$ = `features.half_life_days` (currently 180, about half a season). A
 match played today counts 1.000, one a season old 0.500, two seasons old 0.250.
-Anything dated on or after `as_of` gets weight 0 — that is where the lookahead
+Anything dated on or after `as_of` gets weight 0, and that is where the lookahead
 guard lives.
 
-**The minimum weight** *(added 27 Oct 2026)*. Weights below
+**The minimum weight**. Weights below
 `features.min_match_weight` (0.01) are also set to 0, and every caller drops
 zero-weight rows. With $H = 180$ that is an age of
 
@@ -272,10 +271,10 @@ Parameters live on a log scale, so $e^{\alpha}$ reads as a multiplier: attack
 
 ### 3.2 The low-score correction
 
-Independent Poisson is almost right, and measurably wrong in one place — the
+Independent Poisson is almost right, and measurably wrong in one place: the
 four lowest scorelines. Real football produces more 0-0 and 1-1 draws and fewer
 1-0 and 0-1 results than independence predicts, which §2 of
-`notebooks/01_exploration.ipynb` measures on our own data before any model is
+`notebooks/01_exploration.ipynb` measures on the real data before any model is
 fitted. Dixon and Coles (1997) correct it with one parameter:
 
 $$\tau_{\rho}(x,y) = \begin{cases}
@@ -286,10 +285,10 @@ $$\tau_{\rho}(x,y) = \begin{cases}
   1                  & \text{otherwise}
 \end{cases}$$
 
-A negative $\rho$ raises 0-0 and 1-1 while lowering 1-0 and 0-1 — the direction
+A negative $\rho$ raises 0-0 and 1-1 while lowering 1-0 and 0-1, the direction
 the data asks for. The correction is **mass-preserving**: the four adjustments
 cancel exactly, so the distribution still sums to 1. That is a property of the
-construction, not of our code, and
+construction, not of my code, and
 `test_tau_correction_preserves_total_probability` checks it to 1e-12.
 
 Validity requires
@@ -340,7 +339,7 @@ error. An invalid point now costs a large but finite amount that grows with the
 size of the violation, so there is always a route back downhill.
 
 **A "safe" bound became a binding constraint.** The $\rho$ box was sized from the
-largest $\lambda$ the strength box could theoretically produce —
+largest $\lambda$ the strength box could theoretically produce,
 $e^{1.5+1.5+1.0} \approx 55$ goals a match. That squeezed the box to
 $[-0.018,\ 0.0003]$, and $\rho$ sat pinned on the lower edge while the fit
 reported success and the starts agreed with each other. The tell was that **the
@@ -366,8 +365,8 @@ the result alone: one fit prices every market, and they are automatically
 consistent with one another.
 
 A fixture involving a team absent from the training data is priced at
-league-average parameters rather than rejected — a promoted side must be
-priceable on debut — and flagged `KnownTeams = False`, so Phase 5 can decline to
+league-average parameters rather than rejected (a promoted side must be
+priceable on debut), and flagged `KnownTeams = False`, so Phase 5 can decline to
 stake on a fixture the model does not really know.
 
 ## 4. Calibration  *(built 13 Oct 2026)*
@@ -379,7 +378,7 @@ said 60%, about 60% should happen.
 
 Phase 5 stakes money by comparing the model's probability with the market's. A
 probability that is five points too high across a whole band of matches does not
-look wrong — **it looks like edge**. The staking rule will bet it, every time,
+look wrong: **it looks like edge**. The staking rule will bet it, every time,
 and lose. Calibration is what earns the right to treat the model's output as a
 probability, and therefore the right to compare it to a price.
 
@@ -393,7 +392,7 @@ and judged on the **later** ones.
 Not a random split. Calibration is applied forward in time, so it has to be
 tested forward in time. `test_in_sample_calibration_flatters_itself`
 demonstrates the difference rather than asserting it: fitting and scoring on the
-same matches shows a larger gain than the honest split does, every time.
+same matches shows a larger gain than a chronological split does, every time.
 
 ### 4.3 Proper scoring rules
 
@@ -405,7 +404,7 @@ $$\text{Brier} = \frac{1}{N}\sum_i\sum_k (p_{ik} - o_{ik})^2
 \text{LogLoss} = -\frac{1}{N}\sum_i \ln p_{i,\text{actual}}$$
 
 A rule is **proper** when the only way to minimise it is to report your true
-beliefs — an improper rule can be gamed by shading predictions toward the
+beliefs: an improper rule can be gamed by shading predictions toward the
 extremes.
 
 * **Brier** is bounded and forgiving: being wrong at 99% costs a little under
@@ -414,7 +413,7 @@ extremes.
   about 4.6, where Brier charges under 1.
 
 A model that looks fine on Brier and poor on log-loss is making occasional
-catastrophic calls, and for a Kelly-staked system that is the whole game — one
+catastrophic calls, and for a Kelly-staked system that is the whole game: one
 confident wrong bet at full stake can end a bankroll.
 
 Every score is reported against a **base-rates-only** predictor. Beating that is
@@ -423,11 +422,11 @@ than people expect.
 
 ### 4.4 The two methods, and letting the data choose
 
-* **Platt scaling** — a one-dimensional logistic regression on the model's
+* **Platt scaling**: a one-dimensional logistic regression on the model's
   log-odds. Two parameters: a slope (below 1 corrects overconfidence) and an
   intercept (a level shift). It can only stretch or shift the existing ordering,
   so it cannot overfit much.
-* **Isotonic regression** — any non-decreasing step function. Far more flexible,
+* **Isotonic regression**: any non-decreasing step function. Far more flexible,
   so it can fix shapes Platt cannot, and on a small sample it will happily fit
   noise.
 
@@ -474,8 +473,8 @@ against three standard errors of its own count rather than a flat tolerance.
 
 On data simulated *from* the Dixon-Coles model the calibration gain is tiny, and
 it should be: the model is already almost correct, so there is nothing
-systematic to remove. On real matches the model is misspecified — real football
-is not exactly bivariate Poisson — and the gain should be larger. If it is not,
+systematic to remove. On real matches the model is misspecified (real football
+is not exactly bivariate Poisson), so the gain should be larger. If it is not,
 that is a finding worth reporting rather than tuning away, and the run report
 says so in those terms.
 
@@ -488,8 +487,8 @@ outcome, and conflating them is the subtlest error in this pipeline:
 
 | | Meaning | Used for |
 |---|---|---|
-| **Raw implied**, $1/o$ | what the price pays | **the value test** — EV is positive iff $p > 1/o$ |
-| **De-vigged ("fair")** | the market's honest estimate | a diagnostic, and the basis of CLV in §6 |
+| **Raw implied**, $1/o$ | what the price pays | **the value test**: EV is positive iff $p > 1/o$ |
+| **De-vigged ("fair")** | the market's own estimate | a diagnostic, and the basis of CLV in §6 |
 
 A bet can beat the de-vigged probability and still lose money, because the payout
 is at the actual odds. At odds of 3.50 in a 4.9% book: raw implied 0.2857,
@@ -497,13 +496,13 @@ de-vigged fair 0.272. A model saying **0.278** disagrees with the market in the
 right direction and has expected value of **−2.7%**.
 
 So the value test is measured against the **raw price**, which is also exactly
-where Kelly turns positive — the two agree by construction, and
+where Kelly turns positive: the two agree by construction, and
 `test_edge_and_kelly_agree_on_when_to_bet` asserts they never diverge. The
 de-vigged probability is reported separately as `disagreement`, and never
 triggers a bet.
 
 **This module shipped with that backwards.** The first version tested value
-against the de-vigged probability — the permissive direction — and would have
+against the de-vigged probability, the permissive direction, and would have
 flagged negative-EV bets as value, every time the model agreed slightly more with
 fair value than the price allowed.
 `test_a_bet_beating_fair_but_not_raw_is_not_value` pins the corrected behaviour.
@@ -511,7 +510,7 @@ fair value than the price allowed.
 ### 5.2 De-vigging: proportional vs Shin *(the open decision from §1, now settled)*
 
 **Proportional** scales implied probabilities to sum to 1 and assumes the margin
-is spread evenly. Bookmakers do not spread it evenly — they load more onto
+is spread evenly. Bookmakers do not spread it evenly; they load more onto
 longshots, because that is where recreational money goes. So proportional
 de-vigging **overstates longshot probabilities**.
 
@@ -534,7 +533,7 @@ to unwind.
 
 $$f^{*} = \frac{bp - q}{b} = \frac{po - 1}{o - 1}$$
 
-the fraction maximising expected *logarithmic* growth — verified numerically in
+the fraction maximising expected *logarithmic* growth, verified numerically in
 `test_kelly_maximises_expected_log_growth` rather than asserted.
 
 **Kelly assumes $p$ is known exactly.** It is not: $p$ is a fitted model's output
@@ -544,7 +543,7 @@ asymmetric:
 $$E[\ln] = p\ln(1 + f(o-1)) + (1-p)\ln(1-f)$$
 
 * at $f^{*}$, growth is maximised;
-* at roughly $2f^{*}$, growth is **zero** — all the edge converted to variance;
+* at roughly $2f^{*}$, growth is **zero**: all the edge converted to variance;
 * beyond that, the bet loses money *with a real edge in hand*.
 
 **The "2x" figure deserves precision, because it is usually quoted as an identity
@@ -562,7 +561,7 @@ vanishes at $f = 2\mu/\sigma^2$. For discrete bets the zero-growth point is
 | 0.505 | 2.0 | **2.000×** (tiny edge: the limit) |
 
 The practical conclusion is unchanged. A model whose probabilities are 20% too
-optimistic is already staking roughly double what it should at "full Kelly" —
+optimistic is already staking roughly double what it should at "full Kelly",
 sitting on the zero-growth boundary with a genuine advantage. **That, not variance
 reduction, is the argument for fractional Kelly.**
 `staking.kelly_fraction` defaults to 0.25, which survives being wrong about $p$
@@ -573,9 +572,9 @@ by a factor of four before reaching that boundary.
 Kelly sizes each bet as though it were the only one. Two caps are imposed on top,
 and they are explicitly *risk management*, not theory:
 
-* `max_stake_fraction` (5%) — no single bet can matter more than this, because a
+* `max_stake_fraction` (5%): no single bet can matter more than this, because a
   single model probability can be badly wrong;
-* `max_daily_exposure` (15%) — ten simultaneous bets on one afternoon are not
+* `max_daily_exposure` (15%): ten simultaneous bets on one afternoon are not
   independent enough for Kelly's arithmetic to be safe. A crowded day is scaled
   down proportionally, preserving relative sizing.
 
@@ -591,19 +590,19 @@ first two's winnings uses information that did not exist.
 **ROI and yield are different numbers** and are routinely confused: ROI is on the
 bankroll, yield is on money staked. A plan can show a large ROI with a thin yield
 by churning volume, and the risk profiles are nothing alike. Both are reported,
-alongside **maximum drawdown** as a share of the running peak — which is how a
+alongside **maximum drawdown** as a share of the running peak, which is how a
 bankroll fall is actually experienced.
 
 ### 5.6 What these numbers are not
 
 The staking run uses a model fitted on **all** the data. It is a sanity check
 that the plumbing works and the caps bind, not a result. §6's walk-forward
-backtest produces the honest version, and the run report says so every time it
+backtest produces the out-of-sample version, and the run report says so every time it
 prints.
 
 ## 6. Backtesting & evaluation  *(built 18 Oct 2026)*
 
-**The honesty layer.** Everything before this phase produced numbers that were,
+**The validation layer.** Everything before this phase produced numbers that were,
 in one way or another, fitted on data they were then measured against. This is
 what turns them into a forecast.
 
@@ -623,9 +622,9 @@ one did plus what has since been played
 (`test_every_window_has_more_training_data_than_the_last`).
 
 **Why a cadence rather than refitting every match.** Refitting before every
-single match is the purest version and is also what a real bettor could not do —
+single match is the purest version and is also what a real bettor could not do:
 the model would change between two matches kicking off together.
-`backtest.refit_every_n_days` is both honest and realistic: it is what someone
+`backtest.refit_every_n_days` avoids lookahead and is realistic: it is what someone
 running this weekly would actually have. The cost is a model up to one window
 stale when it prices the last match in that window, which is a **conservative**
 error, not a flattering one.
@@ -639,18 +638,18 @@ fixtures.
 
 The boundary is **strict**. A match on the same date as the window's first match
 is excluded from training, because two matches kicking off the same afternoon
-cannot inform each other — at the moment the bets are placed, neither has
+cannot inform each other: at the moment the bets are placed, neither has
 happened. `test_guard_treats_the_same_day_as_a_leak` pins it.
 
 Three leaks this phase prevents, in increasing order of subtlety:
 
 | Leak | Where it hides |
 |---|---|
-| **Model** | fitting on matches after the bet — guarded per window |
+| **Model** | fitting on matches after the bet, guarded per window |
 | **Calibration** | a map fitted on all the data has seen the outcomes it is calibrating; the effect is invisible, probabilities simply look better than they were |
-| **Odds** | staking at the closing price, which did not exist when the decision was made — `test_bets_are_struck_at_the_available_odds_not_the_close` checks every recorded price against the source opening price |
+| **Odds** | staking at the closing price, which did not exist when the decision was made; `test_bets_are_struck_at_the_available_odds_not_the_close` checks every recorded price against the source opening price |
 
-### 6.3 Closing-line value — the headline metric
+### 6.3 Closing-line value: the headline metric
 
 CLV compares the odds taken against the **closing** odds, the last price before
 kick-off, after every injury report and team sheet has been absorbed. The closing
@@ -658,7 +657,7 @@ line is the market's most efficient estimate, and that is exactly why beating it
 means something.
 
 **Why CLV rather than ROI.** ROI is what you earn, so it is the number that
-matters — and it is almost useless for deciding whether a model *works*, because
+matters, but it is almost useless for deciding whether a model *works*, because
 its variance is enormous. A 3% edge into 3.0 odds has a per-bet standard
 deviation around 1.4 units; establishing it takes **thousands** of bets. CLV does
 not depend on results at all: every bet measures whether the price moved your
@@ -683,11 +682,11 @@ and never lets the flattering measure stand as the verdict
 
 > **Correction (25 Oct 2026).** This section previously illustrated the point
 > with a worked example (ratio +1.82%, points −0.67%) from a session whose
-> numbers were never reproduced from `data/raw/`. When the real 2023–25 run
+> numbers were never reproduced from `data/raw/`. When the real 2023-25 run
 > was made, the two measures *agreed*, so the example is withdrawn. The
 > argument stands on the arithmetic alone. Real figures are in §6.5.
 
-#### Decomposing CLV: margin paid and market movement *(added 25 Oct 2026)*
+#### Decomposing CLV: margin paid and market movement
 
 Probability points compares the closing **fair** probability with the **raw**
 implied probability of the price taken, and the raw price includes the
@@ -739,9 +738,9 @@ where.
 confidence interval.** A yield of +3% over 200 bets and +3% over 20,000 bets are
 entirely different claims, and a bare point estimate hides which one you have.
 Percentile bootstrap rather than a normal approximation, because bet-level
-returns are violently skewed — most bets lose a unit, a few win several.
+returns are violently skewed: most bets lose a unit, a few win several.
 
-* **Yield** (profit ÷ turnover) and **ROI** (on bankroll) — different questions,
+* **Yield** (profit ÷ turnover) and **ROI** (on bankroll): different questions,
   routinely confused. Yield is a *ratio of sums*, so it is a stake-weighted
   average of per-bet returns, and its interval comes from
   `metrics.bootstrap_ratio_ci`, which resamples whole bets (profit and stake
@@ -755,11 +754,11 @@ returns are violently skewed — most bets lose a unit, a few win several.
   experienced.
 * **Sharpe-like ratio**, named that on purpose: no risk-free rate is subtracted,
   and it assumes near-normal returns which bet returns are not. It therefore
-  understates tail risk — the risk that actually ends bankrolls — and is read
+  understates tail risk, the risk that actually ends bankrolls, and is read
   beside the drawdown, which makes no such assumption.
 * **Performance by claimed edge**, the same diagnostic as for CLV.
 
-### 6.5 What the first honest run said
+### 6.5 What the first real-data run said
 
 *Regenerated 25 Oct 2026 from `data/raw/` (EPL 2023/24 and 2024/25, 760
 matches), run fingerprint `eddedac58a664dd8` (it read `c6c0bb194dcd9ba2` until the 27 Oct
@@ -773,9 +772,9 @@ amended.*
 | bets | 260 | 433 |
 | ROI | +603.26% | **−82.60%** |
 | yield (profit ÷ turnover) | +34.07% | **−15.84%** [−28.57%, −3.47%] |
-| CLV, probability points | — | **−1.87%** [−2.11%, −1.63%] |
-| of which: margin paid | — | −1.89% |
-| of which: market movement | — | **+0.02%** [−0.22%, +0.27%] |
+| CLV, probability points | n/a | **−1.87%** [−2.11%, −1.63%] |
+| of which: margin paid | n/a | −1.89% |
+| of which: market movement | n/a | **+0.02%** [−0.22%, +0.27%] |
 
 The in-sample figure is an artefact of a model that had seen the matches it was
 betting on. The walk-forward figure is the forecast, and its yield interval
@@ -788,7 +787,7 @@ It does not mean no edge.
 Reporting this rather than tuning until it looks better is the deliverable.
 
 
-### 6.6 The model against the market, on the same matches *(added 5 Nov 2026)*
+### 6.6 The model against the market, on the same matches
 
 CLV measures whether the model's bets anticipate the market. A more direct
 question is whether its *probabilities* beat the market's. Three things make
@@ -827,7 +826,7 @@ test on a single seed fails one run in twenty by construction.
 
 ## 7. Hardening & reproducibility  *(built 20 Oct 2026)*
 
-Phases 1–6 built a model. Phase 7 makes the claim *"these are the numbers this
+Phases 1-6 built a model. Phase 7 makes the claim *"these are the numbers this
 code produces"* checkable by someone other than its author. Three mechanisms,
 each answering a specific way a quantitative result quietly stops being true.
 
@@ -843,12 +842,12 @@ numbers, and nobody can say which run was wrong.
 `test_every_dependency_is_pinned` asserts the `==`. A second test,
 `test_requirements_cover_everything_the_code_imports`, walks every module in
 `src/` and `scripts/` with `ast`, collects the third-party imports and asserts
-each one is declared — the failure mode where code works on the author's machine
+each one is declared: the failure mode where code works on the machine it was written on
 because a package happened to be installed there, and fails on a clean clone.
 
 > **A bug in the test itself, worth recording.** The first version found imports
 > by matching `^\s*(from|import)\s+(\w+)` against raw lines, and failed with a
-> missing dependency called `average` — picked up from the comment
+> missing dependency called `average`, picked up from the comment
 > `# Average ranks so tied scores...` in `src/metrics.py`. A regex cannot tell
 > code from prose; a parser can. The test now walks `ast.Import` and
 > `ast.ImportFrom` nodes, which by construction only sees real imports.
@@ -862,8 +861,8 @@ visible rather than masked. Each job installs the pinned requirements, runs
 sample with `--no-save`.
 
 The pipeline run matters as much as the test suite. Unit tests can all pass
-while the stages no longer fit together — a changed return signature, a renamed
-column — and the pipeline run is the only check that the thing a reader is
+while the stages no longer fit together, (a changed return signature, a renamed
+column), and the pipeline run is the only check that the thing a reader is
 invited to run actually runs.
 
 ### 7.3 Structured logging and the run fingerprint
@@ -875,8 +874,8 @@ bets. Loggers are namespaced `v8.<module>`, and `configure()` clears existing
 handlers so calling it twice does not double every line.
 
 `run_fingerprint(config)` is the reproducibility mechanism. It hashes the
-result-affecting config blocks — `seed`, `data`, `schema`, `validation`,
-`features`, `model`, `calibration`, `staking`, `backtest` — as sorted JSON and
+result-affecting config blocks (`seed`, `data`, `schema`, `validation`,
+`features`, `model`, `calibration`, `staking`, `backtest`) as sorted JSON and
 takes the first 16 characters of the SHA-256. Every run prints it:
 
 ```
@@ -885,9 +884,9 @@ run fingerprint: eddedac58a664dd8   (same fingerprint => same numbers)
 
 The properties the tests pin:
 
-* **Stable** — the same config hashes identically across runs and processes.
-* **Sensitive** — changing `kelly_fraction` from 0.25 to 0.20 changes the hash.
-* **Cosmetically invariant** — reordering keys, or editing a comment, does not.
+* **Stable**: the same config hashes identically across runs and processes.
+* **Sensitive**: changing `kelly_fraction` from 0.25 to 0.20 changes the hash.
+* **Cosmetically invariant**: reordering keys, or editing a comment, does not.
   A fingerprint that changed on a whitespace edit would be ignored within a week.
 
 This converts "it reproduces" from an assertion into something falsifiable. If
@@ -896,7 +895,7 @@ non-deterministic and that is a bug. If the fingerprints differ, the settings
 differed and the comparison was never valid. Either way the question is
 answerable, which it was not before.
 
-**What the fingerprint does not promise** *(added 25 Oct 2026)*. It fixes the
+**What the fingerprint does not promise**. It fixes the
 *settings*, not the arithmetic underneath them. The same fingerprint on the
 same data, run on Windows and on Linux with identical pinned libraries, gave
 identical bet counts, ROI and CLV to two decimal places, but walk-forward
@@ -906,7 +905,7 @@ the eighth significant figure of one fitted parameter can nudge a Kelly stake
 by a cent. So the precise claim is: *same fingerprint, same environment ⇒ same
 numbers; same fingerprint across platforms ⇒ same numbers to reported
 precision*. `numbers.json` is therefore generated on one designated machine
-(the author's), and the documentation tests compare at the precision the
+(mine), and the documentation tests compare at the precision the
 documents quote.
 
 A sharper case arrived with the 13-season run (27 Oct 2026): **a decision can
@@ -919,7 +918,7 @@ turns a rounding-level difference into a discrete one. That is the strongest
 argument for generating published figures on one machine, and for docs tests
 that fail rather than warn: this one was caught before commit.
 
-### 7.3a Variant configs extend the base *(added 27 Oct 2026)*
+### 7.3a Variant configs extend the base
 
 A second result needs a second config, and two full copies of a 200-line file
 drift: a threshold changed in one and not the other becomes a difference in
@@ -940,7 +939,7 @@ seasons from both merged configs and requires them to be identical.
   make a run depend on a third-party site being up, which is the opposite of
   reproducible.
 * **No caching of fitted models.** Refitting is a few seconds and a cache is a
-  place for stale parameters to hide — the exact class of bug Phase 6 exists to
+  place for stale parameters to hide, the exact class of bug Phase 6 exists to
   catch.
 
 ## 8. Reporting  *(built 21 Oct 2026)*
@@ -951,21 +950,21 @@ a result and a reader, which is where quantitative work is usually lost.
 ### 8.1 Charts as a build artefact, not a drawing
 
 `scripts/make_charts.py` regenerates every chart in the README from one pipeline
-run, and writes `docs/charts/numbers.json` alongside them — the headline figures
+run, and writes `docs/charts/numbers.json` alongside them, the headline figures
 plus the Phase 7 run fingerprint. The README quotes numbers from that file and
 `tests/test_docs.py` checks the two agree, to within half of the last decimal
 place quoted.
 
 This closes a loop that is usually left open. A README is the one file nobody
 re-reads after the code changes, so its numbers drift out of date silently and
-the drift is only ever found by a reader — in this case, an interviewer. Here a
+the drift is only ever found by a reader (in this case, an interviewer). Here a
 stale number fails the test suite.
 
 The five charts, and the question each answers:
 
 | Chart | Question |
 |---|---|
-| in-sample vs walk-forward | what does an honest test boundary cost? |
+| in-sample vs walk-forward | what does a lookahead-free test boundary cost? |
 | CLV distribution | is the model beating the closing line? |
 | CLV by claimed edge | does the model know *where* it is right? |
 | reliability diagram | is the model honest when it says 70%? |
@@ -987,7 +986,7 @@ rather than remembering to take it.
 ### 8.3 A chart that was reporting the wrong measure
 
 Building the CLV-by-edge chart surfaced a defect in `clv_by_band`. It aggregated
-`mean_clv_ratio` and nothing else — the odds-ratio measure that §6 establishes is
+`mean_clv_ratio` and nothing else: the odds-ratio measure that §6 establishes is
 asymmetric and can read positive while the model loses to the close. The single
 sharpest diagnostic in the project was only available in the units the project
 had already declared misleading.
@@ -1003,7 +1002,7 @@ it is a bug with a narrower blast radius.
 
 * **ROI and yield on one axis.** The first version put both on a shared scale.
   ROI ran to +409% and yield to +2.2%, so yield rendered as an invisible sliver
-  against the axis. Two measures of different scale get two panels — never two
+  against the axis. Two measures of different scale get two panels, never two
   y-axes on one chart, which invites the eye to read a relationship that is not
   there. They are now small multiples with independent scales.
 * **A layout call that silently disabled the layout engine.**
@@ -1019,7 +1018,7 @@ it is a bug with a narrower blast radius.
 sample-built charts as results. On 21 October that guard was tested in
 production and lost: three stamped charts from the 12-match sample were
 committed, and the README was published referencing two more that the sample
-run had skipped entirely — so the repository's front page carried three
+run had skipped entirely, so the repository's front page carried three
 meaningless charts and two broken images.
 
 Nothing malfunctioned. The stamp appeared, `numbers.json` recorded
@@ -1039,7 +1038,7 @@ The distinction is worth carrying beyond this project:
 
 > **A control that reports a problem is not the same as a control that prevents
 > one.** Whether the difference matters depends entirely on whether anyone is
-> reading at the moment it fires — which is exactly when they are least likely
+> reading at the moment it fires, which is exactly when they are least likely
 > to be.
 
 The same reasoning produced the required `history` argument in `blend_goals`
@@ -1049,15 +1048,15 @@ unrepresentable rather than merely visible.
 ### 8.6 Validating the instrument  *(built 23 Oct 2026)*
 
 Every section above reports a number. None of them establishes that the
-machinery producing those numbers can tell signal from noise — and a backtester
+machinery producing those numbers can tell signal from noise, and a backtester
 that reports "+4% CLV" is worthless unless it would have reported nothing had
 there been nothing there.
 
 `scripts/simulation_study.py` answers that prior question. It generates markets
 whose properties are known by construction, because the data-generating process
 is written in the file: a bivariate Poisson world with Dixon-Coles dependence,
-priced by a bookmaker with a stated margin, estimation noise, and — in the
-biased arms — a deliberate understatement of home advantage that the closing
+priced by a bookmaker with a stated margin, estimation noise, and, in the
+biased arms, a deliberate understatement of home advantage that the closing
 line then corrects toward the truth.
 
 #### The result
@@ -1095,12 +1094,12 @@ measured CLV near zero means *no edge of detectable size*, not *no edge*. Those
 are different claims, and only one of them is supportable.
 
 It also sets the bar for the project's own real-data run. If that run reports a
-CLV inside ±5 points, the honest reading is that the question is unresolved at
-this sample size — which is a more useful thing to be able to say than either
+CLV inside ±5 points, the correct reading is that the question is unresolved at
+this sample size, which is a more useful thing to be able to say than either
 "it works" or "it doesn't".
 
 *Applied 25 Oct 2026 (§6.5):* the real run's market movement was +0.02 points
-[−0.22, +0.27], well inside that band. The honest reading is the one written
+[−0.22, +0.27], well inside that band. The reading is the one written
 here in advance: no edge of detectable size on two seasons.
 
 One caution when comparing the two. The simulation's efficient book showed
@@ -1112,7 +1111,7 @@ yet report its CLV decomposed.
 
 #### A bug the study found in itself
 
-The first version of `price()` could emit decimal odds **below 1.00** — an
+The first version of `price()` could emit decimal odds **below 1.00**, an
 impossible price, and one `validation.min_odds` would reject had it arrived in a
 real file. The simulator was producing data its own pipeline would refuse.
 
@@ -1141,7 +1140,7 @@ efficient book showed movement of −0.00 [−0.08, +0.09]: the measurement was
 sound, and the movement came from *which* bets were selected. Betting only the
 longest 25% of opening prices, with no model at all, showed +0.89. The
 real-data equivalent, Bet365's opening price against Pinnacle's close, is
-+0.12 [+0.06, +0.17] over EPL 2012–25. Two causes then separated cleanly:
++0.12 [+0.06, +0.17] over EPL 2012-25. Two causes then separated cleanly:
 
 | longest 25% of prices, no model | Shin de-vig | proportional de-vig |
 |---|---|---|

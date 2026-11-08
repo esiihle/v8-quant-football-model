@@ -1,14 +1,14 @@
 """
-Phase 9 tests — the simulation study.
+Phase 9 tests: the simulation study.
 
 The study validates the backtester, so these tests validate the study. Two
 kinds, split by cost:
 
-* Fast — the market generator produces what it claims to: coherent books, a
+* Fast: the market generator produces what it claims to: coherent books, a
   mispricing of the stated size, and a closing line that corrects toward the
   truth. If the generator is wrong, every conclusion drawn from it is wrong,
   and nothing downstream would notice.
-* Recorded — the committed `simulation_study.json` must satisfy the two
+* Recorded: the committed `simulation_study.json` must satisfy the two
   invariants the study exists to establish. Checking the recorded run rather
   than re-running keeps the suite fast; regenerating is a deliberate act.
 
@@ -40,7 +40,7 @@ def study_module():
 @pytest.fixture(scope="module")
 def recorded():
     if not STUDY.exists():
-        pytest.skip("docs/charts/simulation_study.json is absent — run "
+        pytest.skip("docs/charts/simulation_study.json is absent; run "
                     "`python scripts/simulation_study.py` first")
     return json.loads(STUDY.read_text())
 
@@ -68,7 +68,7 @@ def test_the_simulated_odds_form_a_coherent_book(study_module):
 
     The same check `verify_raw_data.py` applies to a downloaded file is applied
     to the simulator's own output. A study built on incoherent prices would
-    produce a confident, meaningless number — and the de-vigging step would be
+    produce a confident, meaningless number, and the de-vigging step would be
     the thing quietly producing nonsense.
     """
     matches, _ = study_module.build_market(1.00, n_seasons=1, seed=3)
@@ -83,7 +83,7 @@ def test_the_simulated_odds_form_a_coherent_book(study_module):
 
     assert 1.02 < book_open.median() < 1.12
     assert 1.00 < book_close.median() < 1.06
-    # The closing line is sharper than the opening — thinner margin.
+    # The closing line is sharper than the opening, thinner margin.
     assert book_close.median() < book_open.median()
 
 
@@ -91,7 +91,7 @@ def test_the_closing_line_corrects_toward_the_truth(study_module):
     """CLV only means anything if the close moves toward the real probability.
 
     In a biased market the opening price understates the home team. The closing
-    price must sit between the opening and the truth — otherwise the study is
+    price must sit between the opening and the truth, otherwise the study is
     measuring drift, not correction, and a positive CLV would prove nothing.
     """
     matches, _ = study_module.build_market(0.80, n_seasons=1, seed=5)
@@ -135,7 +135,7 @@ def test_no_edge_is_reported_on_an_efficient_book(recorded):
 def test_a_model_with_no_information_finds_no_edge(recorded):
     noise = recorded["noise_control"]
     assert not noise.get("detected", False), (
-        "random probabilities produced a significant CLV — the measurement is "
+        "random probabilities produced a significant CLV: the measurement is "
         "manufacturing signal"
     )
 
@@ -167,7 +167,7 @@ def test_the_detection_threshold_is_reported_in_usable_units(recorded):
         pytest.skip("no level in the recorded sweep reached detection")
     assert 0 < threshold < 0.5
     assert recorded["matches_per_level"] > 0, (
-        "a detection threshold without a sample size is not a result — the "
+        "a detection threshold without a sample size is not a result; the "
         "same edge is detectable or not depending on how many matches you have"
     )
 
@@ -179,7 +179,7 @@ def test_the_study_states_that_it_is_simulated(recorded):
     assert "no claim" in note or "makes no claim" in note
 
 
-# --- Added 26 Oct 2026: the decomposition, recorded ------------------------
+# --- The decomposition, recorded ------------------------
 
 def test_every_recorded_arm_is_decomposed(recorded):
     """Each arm records margin paid and market movement, and the identity holds:
@@ -200,7 +200,7 @@ CALIBRATION = REPO_ROOT / "docs" / "charts" / "simulation_calibration.json"
 @pytest.fixture(scope="module")
 def calibration():
     if not CALIBRATION.exists():
-        pytest.skip("docs/charts/simulation_calibration.json is absent - run "
+        pytest.skip("docs/charts/simulation_calibration.json is absent; run "
                     "`python scripts/simulation_study.py --calibrate` on real data")
     return json.loads(CALIBRATION.read_text())
 

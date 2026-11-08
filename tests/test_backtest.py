@@ -1,5 +1,5 @@
 """
-Phase 6 tests — walk-forward backtest, CLV and the headline metrics.
+Phase 6 tests: walk-forward backtest, CLV and the headline metrics.
 
 The test that matters most is `test_lookahead_guard_catches_a_leak`: the engine's
 only real job is to never see the future, so that is what gets attacked hardest.
@@ -36,7 +36,7 @@ def make_history(n_rounds=90, seed=0, margin=0.055, model_edge=0.0):
     """Simulate a league with a realistic bookmaker and closing line.
 
     ``model_edge`` shifts the closing line toward the home side relative to the
-    opening price, which simulates a market that moves the way our bets point —
+    opening price, which simulates a market that moves the way our bets point,
     the situation CLV is designed to detect.
     """
     rng = np.random.default_rng(seed)
@@ -100,7 +100,7 @@ def make_bets_with_closing_market(n, taken_home_prob, closing_home_prob,
     signal the test intended.
 
     Here the three closing prices are built from probabilities that sum to 1,
-    then loaded with a margin — a real book.
+    then loaded with a margin, a real book.
     """
     rng = np.random.default_rng(seed)
     taken_home_prob = np.asarray(taken_home_prob, dtype=float)
@@ -126,7 +126,7 @@ def make_bets_with_closing_market(n, taken_home_prob, closing_home_prob,
 
 
 # =========================================================================
-# The lookahead guard — the engine's whole purpose
+# The lookahead guard: the engine's whole purpose
 # =========================================================================
 
 def test_lookahead_guard_passes_a_clean_split():
@@ -256,7 +256,7 @@ def test_missing_columns_are_refused(config):
 
 
 # =========================================================================
-# CLV — the headline metric
+# CLV: the headline metric
 # =========================================================================
 
 def test_clv_ratio_by_hand():
@@ -270,7 +270,7 @@ def test_clv_ratio_by_hand():
 
 
 def test_clv_is_negative_when_the_price_moves_against_you():
-    """Took 2.50 and the close went out to 3.00 — the market decided the outcome
+    """Took 2.50 and the close went out to 3.00: the market decided the outcome
     was LESS likely than we were paid for."""
     bets = pd.DataFrame([{"odds": 2.50, "closing_odds": 3.00,
                           "outcome": "home_win"}])
@@ -581,7 +581,7 @@ def test_disagreeing_clv_measures_are_flagged_not_papered_over(config):
         beat the close                 47.46%                      below 50%
 
     Both intervals excluded zero, in opposite directions, and the report said
-    "the confidence interval INCLUDES ZERO" — which was simply false.
+    "the confidence interval INCLUDES ZERO", which was simply false.
 
     The cause is the asymmetry of the odds ratio: a price halving scores -50%
     while a doubling scores +100%, so the mean is pulled up by its right tail.
@@ -620,7 +620,7 @@ def test_disagreeing_clv_measures_are_flagged_not_papered_over(config):
 def test_a_clearly_negative_clv_is_called_negative(config):
     """No hedging when the answer is unambiguous.
 
-    We take prices implying 0.40 and the close settles at 0.34 — the market
+    We take prices implying 0.40 and the close settles at 0.34: the market
     decides the outcome is LESS likely than we were paid for. Both CLV measures
     and the beat rate should agree that this is bad.
     """
@@ -654,7 +654,7 @@ def test_beat_rate_is_reported_with_its_own_verdict(config):
     assert "above 50%" in clv.clv_report(summary)
 
 
-# --- Added 21 Oct 2026 (Phase 8) -------------------------------------------
+# --- Phase 8 -------------------------------------------
 
 def test_clv_bands_report_the_authoritative_measure():
     """The band table must carry probability points, not only the odds ratio.
@@ -687,7 +687,7 @@ def test_clv_bands_report_the_authoritative_measure():
     assert table["bets"].sum() == n
 
 
-# --- Added 25 Oct 2026: where negative CLV comes from -----------------------
+# --- Where negative CLV comes from -----------------------
 
 def make_bets_with_known_movement(n, move, margin=0.05, seed=0):
     """Bets where the margin paid and the market's movement are known exactly.
@@ -751,7 +751,7 @@ def test_a_bettor_with_no_information_shows_negative_clv_equal_to_the_margin(
     market did not move at all, and the whole figure was the bookmaker's cut.
 
     Here the closing market equals the opening one (move = 0). CLV must still
-    be clearly negative - the margin is real - and the report must attribute it
+    be clearly negative (the margin is real), and the report must attribute it
     to the margin, not to the market.
     """
     bets = make_bets_with_known_movement(400, move=0.0, seed=2)
@@ -773,7 +773,7 @@ def test_movement_that_does_not_cover_the_margin_is_named(proportional_config):
     one point while a 5% book costs about two.
 
     Found while writing this test: the price shortens, so the odds ratio is
-    POSITIVE while probability points is NEGATIVE - the measures disagree. The
+    POSITIVE while probability points is NEGATIVE, so the measures disagree. The
     report used to explain every disagreement by the ratio's asymmetry. Here
     the cause is the margin (charged by points, roughly cancelled in the
     ratio), and the report must say so.

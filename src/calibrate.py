@@ -1,9 +1,9 @@
 r"""
-Stage 4 — Probability calibration.  [Built in Phase 4, 13 Oct 2026]
+Stage 4: Probability calibration. 
 
 A calibrated probability means what it says: of all the matches where the model
 said 60%, about 60% should happen. The Dixon-Coles fit produces probabilities
-that are close but not quite that, for an ordinary reason — it is a simplified
+that are close but not quite that, for an ordinary reason: it is a simplified
 model of a messy process, and the shape of its error is systematic rather than
 random. Calibration maps that systematic part away.
 
@@ -11,7 +11,7 @@ Why this phase exists at all
 ----------------------------
 Phase 5 stakes money by comparing the model's probability with the market's. A
 probability that is 5 points too high across a whole band of matches does not
-look wrong — it looks like edge. The staking rule will dutifully bet it, every
+look wrong: it looks like edge. The staking rule will dutifully bet it, every
 time, and lose. **Calibration is what earns the right to treat the model's
 output as a probability**, and therefore the right to compare it to a price.
 
@@ -29,15 +29,15 @@ depends on it: calibrated probabilities must beat raw ones *out of sample*.
 The two methods, and when each is the right choice
 --------------------------------------------------
 * **Platt scaling** fits a one-dimensional logistic regression on the model's
-  log-odds — two parameters, a slope and an intercept. It can only stretch or
+  log-odds: two parameters, a slope and an intercept. It can only stretch or
   shift the existing ordering, so it cannot overfit much, and it is the safer
   choice on a few hundred matches.
 * **Isotonic regression** fits any non-decreasing step function. It is far more
-  flexible, so it can correct a shape Platt cannot — and on a small sample it
+  flexible, so it can correct a shape Platt cannot, and on a small sample it
   will happily fit noise, producing flat steps that are artefacts of a handful
   of matches.
 
-With one or two seasons of data, Platt is usually the honest choice. The
+With one or two seasons of data, Platt is usually the safer choice. The
 comparison is run out of sample and reported either way, rather than the method
 being chosen by assertion.
 
@@ -259,7 +259,7 @@ def fit_multiclass(predictions, results, method="platt"):
     Parameters
     ----------
     predictions : pandas.DataFrame
-        Must carry the `OUTCOMES` columns — the output of `dixon_coles.predict`.
+        Must carry the `OUTCOMES` columns, the output of `dixon_coles.predict`.
     results : array-like
         Realised results as "H" / "D" / "A".
     """
@@ -364,7 +364,7 @@ def evaluate(predictions, results, config=None, method=None):
     calibration = fit_multiclass(fit_frame, fit_frame["Result"], method)
     calibrated, cost = apply_multiclass(eval_frame, calibration)
 
-    # {probability column: result label} — stated once, used everywhere below.
+    # {probability column: result label}: stated once, used everywhere below.
     mapping = RESULT_CODES
 
     raw_scores = {
@@ -378,7 +378,7 @@ def evaluate(predictions, results, config=None, method=None):
                                                 mapping),
     }
 
-    # Reliability for the home-win market, before and after — the clearest single
+    # Reliability for the home-win market, before and after: the clearest single
     # picture of what calibration did.
     home_happened = (eval_frame["Result"] == "H").astype(float)
     reliability = {
@@ -448,7 +448,7 @@ def compare_methods(predictions, results, config=None):
 # ===========================================================================
 
 def calibration_report(result):
-    """Readable before/after, with the honest verdict spelled out."""
+    """Readable before/after, with the verdict spelled out."""
     lines = ["Probability calibration", "-" * 23]
     lines.append(f"  {'method':<30} {result['method']:>12}")
     lines.append(f"  {'fitted on':<30} {result['n_fitted']:>12,} matches "
@@ -482,11 +482,11 @@ def calibration_report(result):
     helped = result["improvement"]["log_loss"] > 0
 
     if not beats_baseline:
-        lines.append("  FAIL — the raw model does not beat a base-rates-only "
+        lines.append("  FAIL: the raw model does not beat a base-rates-only "
                      "predictor out of sample. Calibration cannot rescue that; "
                      "the problem is upstream in Phase 3.")
     elif helped:
-        lines.append("  PASS — calibration improves the model out of sample on "
+        lines.append("  PASS: calibration improves the model out of sample on "
                      "both scoring rules. Phase 5 may treat these as probabilities.")
     else:
         lines.append("  Calibration did NOT improve the model out of sample. "

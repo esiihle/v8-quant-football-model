@@ -2,7 +2,7 @@
 """
 Run the exploration notebook top to bottom on the real data, and save it.
 
-Why a script [added 29 Oct 2026]
+Why a script
 --------------------------------
 The notebook's saved outputs are part of what GitHub shows a reader, so they
 are held by a test (`test_the_notebook_was_run_on_real_data_with_the_current_config`):
@@ -57,7 +57,7 @@ def main():
     missing = [entry["path"] for entry in ingest.expected_raw_files(config)
                if not entry["exists"]]
     if missing:
-        print("REFUSED - the notebook would run on the bundled sample. Missing:")
+        print("REFUSED: the notebook would run on the bundled sample. Missing:")
         for path in missing:
             print(f"  {path}")
         print("Rebuild them with scripts/rebuild_raw_from_mirrors.py first.")
@@ -76,7 +76,7 @@ def main():
     except CellExecutionError as error:
         # Saving a half-run notebook would publish a mix of fresh and missing
         # outputs. Stop with the error and leave the file as it was.
-        print("\nFAILED - a cell raised an error; the notebook was NOT saved.\n")
+        print("\nFAILED: a cell raised an error; the notebook was NOT saved.\n")
         print(str(error)[:2000])
         return 1
 

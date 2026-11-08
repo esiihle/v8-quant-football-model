@@ -1,5 +1,5 @@
 """
-Phase 1 tests — ingestion, validation and the canonical table.
+Phase 1 tests: ingestion, validation and the canonical table.
 
 Unlike the smoke tests, these check behaviour: each one feeds in a specific
 defect and asserts what the pipeline does about it. Written so a failure names
@@ -28,7 +28,7 @@ from src import canonical, ingest
 def make_raw(n=6):
     """Build a small raw frame in football-data.co.uk shape.
 
-    Values cycle, so any n works — the tests that need a bigger file get one
+    Values cycle, so any n works; the tests that need a bigger file get one
     without a second fixture to keep in step with this one.
     """
     dates = pd.date_range("2024-08-17", periods=n, freq="7D")
@@ -166,7 +166,7 @@ def test_canonical_table_shape_and_order(config):
 
     # Exact columns, in the documented order.
     assert list(table.columns) == canonical.CANONICAL_COLUMNS
-    # Chronological — Phase 6 depends on this.
+    # Chronological: Phase 6 depends on this.
     assert table["MatchDate"].is_monotonic_increasing
     # Identifiers are unique.
     assert table["MatchID"].is_unique

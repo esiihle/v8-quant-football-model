@@ -1,5 +1,5 @@
 """
-Phase 8 tests — the README must stay true.
+Phase 8 tests: the README must stay true.
 
 A README is the one file nobody re-reads after the code changes, which is how a
 portfolio project ends up claiming numbers its own pipeline no longer produces.
@@ -7,9 +7,9 @@ These tests make that failure loud.
 
 Two kinds of test here:
 
-* Always run — the README references only charts the chart script actually
+* Always run: the README references only charts the chart script actually
   writes, carries no leftover placeholders, and names the real repository.
-* Run when ``docs/charts/numbers.json`` is present — every headline number in
+* Run when ``docs/charts/numbers.json`` is present, every headline number in
   the README matches the run that produced the charts. Without the real raw
   data there is no numbers.json, so those tests skip with instructions rather
   than fail on a fresh clone.
@@ -41,7 +41,7 @@ TOLERANCE = 0.0005
 # invisible to every link test: broken, missing or stale, nothing would fail.
 CHART_LINK = r"docs/charts/((?:[\w-]+/)?[\w.-]+\.png)"
 
-# The 13-season run [added 27 Oct 2026]. It publishes a SUBSET of the charts:
+# The 13-season run. It publishes a SUBSET of the charts:
 # the two that say something the headline's charts do not. Generate exactly
 # these, so the folder holds nothing the README does not show:
 #   python scripts/make_charts.py --config configs/epl_2012_2025.yaml
@@ -59,7 +59,7 @@ def collapse(text):
     """Whitespace-normalised, lowercased text, for matching a wrapped phrase.
 
     A phrase check against the raw file fails the moment the sentence wraps
-    across a line — which says nothing about the README and everything about
+    across a line, which says nothing about the README and everything about
     the test.
     """
     return " ".join(text.split()).lower()
@@ -93,7 +93,7 @@ def chart_script():
 def numbers():
     if not NUMBERS.exists():
         pytest.skip(
-            "docs/charts/numbers.json is absent — run "
+            "docs/charts/numbers.json is absent; run "
             "`python scripts/make_charts.py` on real data first. On a clone "
             "without data/raw this is expected."
         )
@@ -214,7 +214,7 @@ def test_readme_quotes_the_clv_verdict(readme, numbers):
 
 
 def test_readme_quotes_the_yield_interval(readme, numbers):
-    """Added 25 Oct 2026. The yield's interval decides whether the loss is
+    """The yield's interval decides whether the loss is
     established, and the README once quoted the interval of a different
     number (the unweighted mean return). Both ends must match numbers.json."""
     for key, label in (("walk_forward_yield_low", "the yield interval's lower bound"),
@@ -223,8 +223,8 @@ def test_readme_quotes_the_yield_interval(readme, numbers):
 
 
 def test_readme_quotes_the_clv_decomposition(readme, numbers):
-    """Added 25 Oct 2026. The README's central claim - that the negative CLV
-    is all margin and the market did not move - rests on these four figures."""
+    """The README's central claim (that the negative CLV
+    is all margin and the market did not move) rests on these four figures."""
     for key, label in (("clv_margin_paid", "the margin paid"),
                        ("clv_movement_mean", "the market movement"),
                        ("clv_movement_low", "the movement interval's lower bound"),
@@ -270,7 +270,7 @@ def test_committed_charts_came_from_real_data(numbers):
 
 
 def test_every_chart_the_readme_shows_exists_on_disk(readme):
-    """Charts the README shows must be in the repo — with one exemption.
+    """Charts the README shows must be in the repo, with one exemption.
 
     While the real-data section carries its "Awaiting regeneration" notice, the
     charts belonging to it legitimately do not exist: they are produced by a run
@@ -305,14 +305,14 @@ def test_every_chart_the_readme_shows_exists_on_disk(readme):
     assert not missing, f"README shows charts that are not in the repo: {missing}"
 
 
-# --- Added 22 Oct 2026: the guard that was missing -------------------------
+# --- The guard that was missing -------------------------
 
 def test_sample_charts_cannot_be_written_into_the_published_folder(chart_script):
     """docs/charts is what the README publishes, so sample data may not reach it.
 
     On 21 Oct 2026 the football project committed three ILLUSTRATIVE-stamped
     charts built from a 12-match sample, and shipped a README referencing two
-    more that did not exist. The stamp had worked exactly as designed — and a
+    more that did not exist. The stamp had worked exactly as designed, and a
     stamp is a warning, which is something a person can walk past.
 
     `refuse_illustrative_output` turns the warning into a refusal: it returns
@@ -337,8 +337,8 @@ def test_the_refusal_is_decided_before_any_work_is_done(chart_script):
     """`will_use_sample` must answer from the filesystem alone.
 
     The first version of this guard ran after `gather()`, which meant a run
-    doomed to be refused still paid for a full pipeline — on the football
-    project, an entire walk-forward backtest — before saying so.
+    doomed to be refused still paid for a full pipeline, on the football
+    project, an entire walk-forward backtest, before saying so.
     """
     from src.config import load_config
     config = load_config()
@@ -358,7 +358,7 @@ def test_unverified_numbers_carry_a_notice_and_verified_ones_do_not():
       figures in the README. They stay, because deleting the results section
       would be worse, but they must be marked unverified.
     * Once `numbers.json` exists, the other tests in this module check every
-      figure against it — so the notice is then false and must be removed.
+      figure against it, so the notice is then false and must be removed.
 
     This exists because of 21 October 2026, when this README was committed
     quoting numbers no run on this machine had ever produced, with no mark
@@ -370,7 +370,7 @@ def test_unverified_numbers_carry_a_notice_and_verified_ones_do_not():
     if NUMBERS.exists():
         assert not flagged, (
             "docs/charts/numbers.json exists, so the figures are verified "
-            "against a real run — remove the 'Awaiting regeneration' notice "
+            "against a real run: remove the 'Awaiting regeneration' notice "
             "from the README."
         )
     else:
@@ -448,7 +448,7 @@ def test_the_data_verifier_rejects_the_three_ways_a_mirror_fails(tmp_path):
     duplicate.to_csv(copied, index=False)
     _, failures, _, _ = verifier.describe(copied, config)
     assert any("identical to" in f for f in failures), (
-        "a closing column copied from the opening price must be refused — "
+        "a closing column copied from the opening price must be refused, "
         "otherwise CLV is measured against itself and reads zero"
     )
 
@@ -463,7 +463,7 @@ def test_the_verifier_checks_the_odds_are_a_coherent_book(tmp_path):
     """Headers can be right while the numbers underneath are nonsense.
 
     Three decimal prices from a real bookmaker imply probabilities summing to a
-    little over 1 — the overround. Prices that sum to 0.84, or to 1.6, did not
+    little over 1: the overround. Prices that sum to 0.84, or to 1.6, did not
     come from a book, whatever the column is called.
     """
     import importlib.util
@@ -483,7 +483,7 @@ def test_the_verifier_checks_the_odds_are_a_coherent_book(tmp_path):
         "Date": pd.date_range("2024-08-10", periods=n, freq="D").strftime("%d/%m/%Y"),
         "HomeTeam": "A", "AwayTeam": "B",
         "FTHG": 2, "FTAG": 1, "FTR": "H",
-        # Prices that imply probabilities summing to ~0.6 — not a book.
+        # Prices that imply probabilities summing to ~0.6, not a book.
         "B365H": 5.0, "B365D": 5.0, "B365A": 5.0,
         "PSCH": 2.0, "PSCD": 3.5, "PSCA": 4.0,
     })
@@ -497,8 +497,8 @@ def test_the_verifier_checks_the_odds_are_a_coherent_book(tmp_path):
 def test_the_simulation_study_is_labelled_as_simulated_in_the_readme(readme):
     """The one thing a simulated headline must never do is look measured.
 
-    The README leads with a result from generated data. That is legitimate —
-    it validates the instrument — but only while every reader can see at a
+    The README leads with a result from generated data. That is legitimate,
+    it validates the instrument, but only while every reader can see at a
     glance that no real market was involved.
     """
     lowered = collapse(readme)
@@ -512,7 +512,7 @@ def test_the_simulation_study_is_labelled_as_simulated_in_the_readme(readme):
 
 
 
-# --- Added 26 Oct 2026: the simulation table is held to its JSON too ---------
+# --- The simulation table is held to its JSON too ---------
 
 SIMULATION = REPO_ROOT / "docs" / "charts" / "simulation_study.json"
 CALIBRATION = REPO_ROOT / "docs" / "charts" / "simulation_calibration.json"
@@ -545,13 +545,13 @@ def test_readme_quotes_the_simulator_calibration(readme):
 
 
 
-# --- Added 27 Oct 2026: the 13-season run is held to its own numbers --------
+# --- The 13-season run is held to its own numbers --------
 
 @pytest.fixture(scope="module")
 def long_numbers():
     path = LONG_RUN_DIR / "numbers.json"
     if not path.exists():
-        pytest.skip(f"{path.relative_to(REPO_ROOT)} is absent - run make_charts.py "
+        pytest.skip(f"{path.relative_to(REPO_ROOT)} is absent; run make_charts.py "
                     "with configs/epl_2012_2025.yaml (see LONG_RUN_DIR)")
     recorded = json.loads(path.read_text())
     if recorded.get("real_data") is not True:
@@ -596,7 +596,7 @@ def test_the_long_run_verdict_follows_its_numbers(readme, long_numbers):
     assert claims_none == (long_numbers.get("clv_movement_verdict") == "none")
 
 
-# --- Added 27 Oct 2026: two chart faults visible only on the long run -------
+# --- Two chart faults visible only on the long run -------
 
 def test_tick_labels_are_never_rounded_into_a_different_number(chart_script):
     """Ticks at -0.25% were printed "-0.3%": a label that disagrees with its
@@ -621,7 +621,7 @@ def test_a_ruined_bankroll_is_drawn_on_a_log_axis(chart_script):
     assert rule([], 1000) is False
 
 
-# --- Added 29 Oct 2026: the exploration, held like everything else ----------
+# --- The exploration, held like everything else ----------
 
 METHODOLOGY = REPO_ROOT / "docs" / "methodology.md"
 NOTEBOOK = REPO_ROOT / "notebooks" / "01_exploration.ipynb"
@@ -695,7 +695,7 @@ def test_the_notebook_was_run_on_real_data_with_the_current_config():
     sample's numbers for four weeks, because nothing looked at its outputs.
 
     The notebook must be saved after a full run, on real data, with no errors,
-    and with the fingerprint of the current config.yaml - so a config change
+    and with the fingerprint of the current config.yaml, so a config change
     (as on 27 Oct) makes a stale notebook fail here instead of misleading a
     reader on GitHub."""
     from src.config import load_config
@@ -709,11 +709,11 @@ def test_the_notebook_was_run_on_real_data_with_the_current_config():
     assert "BUNDLED SAMPLE" not in text
     fingerprint = run_fingerprint(load_config(REPO_ROOT / "config.yaml"))
     assert f"run fingerprint: {fingerprint}" in text, (
-        "the notebook's saved outputs come from a different config - rerun it")
+        "the notebook's saved outputs come from a different config; rerun it")
 
 
 def test_readme_reads_the_reliability_diagram_against_its_noise_floor(readme, numbers):
-    """Added 29 Oct 2026. A calibration error on a few hundred matches is
+    """A calibration error on a few hundred matches is
     mostly noise; the README must give the floor beside the diagram."""
     if "ece_noise_floor_p95" not in numbers:
         pytest.fail("numbers.json predates the noise floor: rerun make_charts.py")
@@ -724,7 +724,7 @@ def test_readme_reads_the_reliability_diagram_against_its_noise_floor(readme, nu
     assert claims_undetectable == (not numbers["ece_detectable"])
 
 
-# --- Added 5 Nov 2026: model vs market, held to numbers.json ----------------
+# --- Model vs market, held to numbers.json ----------------
 
 BENCH_KEYS = [f"bench_{rule}_vs_{market}{suffix}"
               for rule in ("log_loss", "brier") for market in ("opening", "closing")
@@ -732,11 +732,11 @@ BENCH_KEYS = [f"bench_{rule}_vs_{market}{suffix}"
 
 
 # Plain decimals (log-loss, Brier, ECE) are matched within two units of the
-# fourth decimal place - the same idea as TOLERANCE for percentages.
-# [5 Nov 2026] The first version matched the exact text, which was stricter
-# than every other docs check, and it failed CI on its first commit: the
-# author's Windows run gave an ECE noise floor of 0.0213, the build machine's
-# Linux run 0.0212. Platform floating point moves the model's probabilities in
+# fourth decimal place, the same idea as TOLERANCE for percentages.
+# The first version matched the exact text, which was stricter
+# than every other docs check, and it failed CI on its first commit: my
+# Windows run gave an ECE noise floor of 0.0213 and a Linux run gave
+# 0.0212. Platform floating point moves the model's probabilities in
 # the last digits, and a simulated quantile moves with them.
 PLAIN_TOLERANCE = 0.0002
 
@@ -796,7 +796,7 @@ def test_plain_decimal_matching_tolerates_last_digits_only():
         assert_quoted_plain(text, 0.0248, "the wrong sign")
 
 
-# --- Added 6 Nov 2026: the study guide quotes real code and real numbers ----
+# --- The study guide quotes real code and real numbers ----
 
 STUDY_GUIDE = REPO_ROOT / "docs" / "STUDY_GUIDE.md"
 SOURCE_BLOCK = re.compile(r"<!-- source: ([\w./-]+) -->\n```python\n(.*?)```", re.DOTALL)
@@ -845,7 +845,7 @@ def test_the_study_guide_quotes_the_long_run_as_generated():
 
 
 
-# --- Added 6 Nov 2026: the roadmap's "actual" dates are the record's dates --
+# --- The roadmap's "actual" dates are the record's dates --
 
 def test_every_actual_date_in_the_roadmap_is_a_session_in_the_progress_log():
     """Plan-against-actual is only honest if "actual" comes from the record.

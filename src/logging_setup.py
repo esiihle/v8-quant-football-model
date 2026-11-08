@@ -1,5 +1,5 @@
 r"""
-Structured logging.  [Built in Phase 7, 20 Oct 2026]
+Structured logging. 
 
 Why a logging module in a project this size
 -------------------------------------------

@@ -3,7 +3,7 @@ V8 end-to-end pipeline runner (config-driven).
 
 Phase 0: this runs the implemented stages (load + shape report) fully, then
 walks the remaining stages and reports each as [done] or [pending]. As each
-phase is built, its stage lights up here automatically — so this runner doubles
+phase is built, its stage lights up here automatically, so this runner doubles
 as the project's live progress indicator.
 
 30 Sep 2026: the runner now prefers REAL data. It looks for the league/season
@@ -90,7 +90,7 @@ def main():
     )
     header = logging_setup.log_run_header(logger, config)
 
-    print(f"\nV8 pipeline — config loaded, seed={config.get('seed', 42)}")
+    print(f"\nV8 pipeline, config loaded, seed={config.get('seed', 42)}")
     # The fingerprint ties these numbers to the settings that produced them.
     # Two runs with the same fingerprint should produce identical output, which
     # is what makes the reproducibility claim checkable rather than asserted.
@@ -102,13 +102,13 @@ def main():
     #   1. --data <file>   : one explicit file
     #   2. data/raw/*      : the real league-season files named in the config
     #   3. the sample      : bundled fallback, so a fresh clone always runs
-    print("Stage 1 — Ingest")
+    print("Stage 1: Ingest")
 
     if args.data:
         data_path = Path(args.data)
         if not data_path.is_absolute():
             data_path = REPO_ROOT / data_path
-        print(f"  source: explicit file — {data_path}")
+        print(f"  source: explicit file {data_path}")
         df = ingest.load_matches(data_path, config)
 
     else:
@@ -123,12 +123,12 @@ def main():
             print(f"           and save it as {entry['path']}")
 
         if found and not args.sample:
-            print(f"  source: real data — {len(found)} of {len(raw_files)} configured files")
+            print(f"  source: real data, {len(found)} of {len(raw_files)} configured files")
             df = ingest.load_many(found, config)
         else:
             sample_path = REPO_ROOT / config["data"]["sample_path"]
             reason = "forced by --sample" if args.sample else "no raw files found yet"
-            print(f"  source: bundled sample ({reason}) — {sample_path.name}")
+            print(f"  source: bundled sample ({reason}), {sample_path.name}")
             df = ingest.load_matches(sample_path, config)
 
     print()
@@ -144,7 +144,7 @@ def main():
     print()
 
     # --- Phase 2: features, built strictly out of sample ---------------------
-    print("Stage 2 — Feature engineering")
+    print("Stage 2: Feature engineering")
     feature_matrix, feature_rep = features.build_features(matches, config)
     print(features.feature_report(feature_matrix, feature_rep))
     if not args.no_save:
@@ -153,11 +153,11 @@ def main():
     print()
 
     # --- Phase 3: Dixon-Coles fit by penalised, time-weighted MLE ------------
-    print("Stage 3 — Dixon-Coles fit")
+    print("Stage 3: Dixon-Coles fit")
 
     # Phase 2's shrunk strengths seed the optimiser: a cheap, stable estimate is
     # a far better starting point than a flat guess. The two phases are not
-    # rivals — Phase 2 describes, Phase 3 fits.
+    # rivals: Phase 2 describes, Phase 3 fits.
     blended, _ = features.blend_goals(matches, matches, config)
     seed_strengths = features.team_strengths(
         blended, as_of=matches["MatchDate"].max() + pd.Timedelta(days=1), config=config
@@ -171,7 +171,7 @@ def main():
     priced = dixon_coles.predict(model, latest, config)
     row = priced.iloc[0]
     print()
-    print(f"  Worked example — {row['HomeTeam']} vs {row['AwayTeam']}:")
+    print(f"  Worked example: {row['HomeTeam']} vs {row['AwayTeam']}:")
     print(f"    expected goals   {row['ExpectedHomeGoals']:.2f} - "
           f"{row['ExpectedAwayGoals']:.2f}")
     print(f"    1X2              {row['home_win']:.1%} / {row['draw']:.1%} / "
@@ -186,7 +186,7 @@ def main():
     print()
 
     # --- Phase 4: calibration, judged out of sample --------------------------
-    print("Stage 4 — Probability calibration")
+    print("Stage 4: Probability calibration")
 
     # Price every match that the model has enough history to price, then fit the
     # calibration map on the earlier half and judge it on the later half.
@@ -222,15 +222,15 @@ def main():
     except calibrate.CalibrationError as error:
         # Expected on the bundled sample: too few matches to fit a map on one
         # half and judge it on the other. The run continues.
-        print("  CANNOT CALIBRATE — and that is the right outcome here:")
+        print("  CANNOT CALIBRATE, and that is the right outcome here:")
         print(f"    {error}")
         staking_input = None
     print()
 
     # --- Phase 5: staking ----------------------------------------------------
-    print("Stage 5 — Staking (fractional Kelly)")
+    print("Stage 5: Staking (fractional Kelly)")
     if staking_input is None:
-        print("  SKIPPED — no calibrated probabilities to stake.")
+        print("  SKIPPED: no calibrated probabilities to stake.")
     else:
         bets = staking.find_value_bets(staking_input, config)
         ledger, summary = staking.simulate_bankroll(bets, config)
@@ -244,12 +244,12 @@ def main():
     print()
 
     # --- Phase 6: walk-forward backtest, CLV and headline metrics -----------
-    # THE honest numbers. Everything above used a model fitted on all the data.
-    print("Stage 6 — Walk-forward backtest, CLV and headline metrics")
+    # The out-of-sample numbers. Everything above used a model fitted on all the data.
+    print("Stage 6: Walk-forward backtest, CLV and headline metrics")
     try:
         walk = backtest.walk_forward(matches, config, progress=args.verbose)
 
-        # The model against the market on every priced match [5 Nov 2026].
+        # The model against the market on every priced match.
         if len(walk.get("priced", [])):
             print(benchmark.benchmark_report(benchmark.compare(walk["priced"], config)))
             print()
@@ -278,7 +278,7 @@ def main():
                 pass
             print(metrics.metrics_report(headline, band_table))
 
-            # CLV — the headline claim of the project.
+            # CLV: the headline claim of the project.
             print()
             clv_result = clv.clv_summary(walk["bets"], config)
             clv_bands = None
@@ -300,11 +300,11 @@ def main():
         print(f"  CANNOT BACKTEST: {error}")
     except backtest.LookaheadError as error:
         # Never swallowed. A leak means every number would be fiction.
-        print(f"  LOOKAHEAD DETECTED — run aborted: {error}")
+        print(f"  LOOKAHEAD DETECTED, run aborted: {error}")
         raise
 
-    print("\nPhases 0-6 complete: the walk-forward numbers above are the honest"
-          " ones.")
+    print("\nPhases 0-6 complete: the walk-forward numbers above are the"
+          " out-of-sample ones.")
 
 
 if __name__ == "__main__":

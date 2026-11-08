@@ -1,9 +1,9 @@
 r"""
-Stage 3 — The Dixon-Coles model.  [Built in Phase 3, 10 Oct 2026]
+Stage 3: The Dixon-Coles model. 
 
 A bivariate Poisson goal model with the low-score dependence correction, fitted
 by time-weighted, penalised maximum likelihood. This is the statistical core of
-the project: everything downstream — calibration, staking, CLV — consumes the
+the project: everything downstream (calibration, staking, CLV) consumes the
 probabilities this module produces.
 
 The model
@@ -28,7 +28,7 @@ Why the correction exists
 -------------------------
 Independent Poisson gets football *almost* right, and is measurably wrong in one
 specific place: the four low scorelines. Real matches produce more 0-0 and 1-1
-draws, and fewer 1-0 and 0-1 results, than independence predicts — the
+draws, and fewer 1-0 and 0-1 results, than independence predicts: the
 exploration notebook measures exactly that on our own data. Dixon and Coles
 (1997) fix it with a single parameter:
 
@@ -57,7 +57,7 @@ Three implementation decisions worth defending
 2. **Penalised likelihood.** A team with three matches played can push the raw
    MLE to an absurd strength. An L2 penalty on the attack and defence parameters
    pulls them toward zero (= league average). That is Phase 2's Bayesian
-   shrinkage expressed as regularisation — the same argument in the language of
+   shrinkage expressed as regularisation: the same argument in the language of
    an optimiser, and the direct analogue of a ridge-penalised PD model.
 
 3. **Phase 2's strengths seed the optimiser.** The shrunk strengths are a cheap,
@@ -84,7 +84,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 EPSILON = 1e-10
 
 # The likelihood never returns infinity for an invalid parameter set. See the
-# comment in `log_likelihood` — an infinite objective destroys L-BFGS-B's
+# comment in `log_likelihood`: an infinite objective destroys L-BFGS-B's
 # finite-difference gradient and the optimiser silently stops improving. A large
 # finite value that grows with the size of the violation keeps the surface
 # navigable right up to the boundary.
@@ -106,7 +106,7 @@ def tau(x, y, lam, mu, rho):
     Returns 1 everywhere except the four cells (0,0), (0,1), (1,0), (1,1).
 
     All arguments broadcast, so this works on scalars or arrays of matching
-    shape — which is what lets the likelihood be evaluated on every match at
+    shape, which is what lets the likelihood be evaluated on every match at
     once rather than in a Python loop.
     """
     x = np.asarray(x)
@@ -131,13 +131,13 @@ def rho_bounds(lam, mu):
         max(-1/lam, -1/mu)  <=  rho  <=  min(1/(lam*mu), 1)
 
     Outside that range the model assigns a negative probability to a scoreline,
-    which is not a near-miss — it is nonsense.
+    which is not a near-miss; it is nonsense.
 
     **The bound is sensitive to what you feed it, and that matters.** On
     10 Oct 2026 the optimiser was bounded using the largest lambda the parameter
     box could theoretically produce, exp(1.5 + 1.5 + 1.0) = 54.6 goals a match.
     That is not a football score, and it squeezed the rho box to
-    [-0.018, 0.0003] — so rho sat pinned at its lower bound while the fit
+    [-0.018, 0.0003], so rho sat pinned at its lower bound while the fit
     reported success and the starts agreed with each other. The recovery test
     caught it only because the bias did not shrink as the sample grew: noise
     averages out, a binding constraint does not.
@@ -159,7 +159,7 @@ def goal_ceiling(home_goals, away_goals, headroom=2.5, minimum=3.0):
 
     Used only to size the rho box. The mean goals per side, times `headroom`,
     comfortably covers the strongest attack against the weakest defence while
-    staying in the land of actual football — which is the whole point.
+    staying in the land of actual football, which is the whole point.
     """
     observed = max(float(np.mean(home_goals)), float(np.mean(away_goals)))
     return max(observed * headroom, minimum)
@@ -174,7 +174,7 @@ def _unpack(params, n_teams):
 
     Layout: ``[attack_0 ... attack_{n-2}, defence_0 ... defence_{n-1}, gamma, rho]``
 
-    The final attack parameter is not free — it is minus the sum of the others,
+    The final attack parameter is not free, it is minus the sum of the others,
     which imposes the sum-to-zero constraint that makes the model identifiable.
     """
     n_free = n_teams - 1
@@ -238,7 +238,7 @@ def log_likelihood(params, home_idx, away_idx, home_goals, away_goals,
     correction = tau(home_goals, away_goals, lam, mu, rho)
 
     # A non-positive tau means this rho assigns a negative probability to an
-    # observed scoreline. The point is invalid — but returning +inf here is a
+    # observed scoreline. The point is invalid, but returning +inf here is a
     # mistake that cost us a working fit on 10 Oct 2026: L-BFGS-B estimates its
     # gradient by finite differences, so one infinite probe gives inf - finite
     # = inf (or inf - inf = nan), the gradient becomes unusable, and the
@@ -276,7 +276,7 @@ def fit(features, config=None, as_of=None, seed_strengths=None):
     Parameters
     ----------
     features : pandas.DataFrame
-        The Phase 2 feature matrix (or the canonical table — anything carrying
+        The Phase 2 feature matrix (or the canonical table, anything carrying
         MatchDate, HomeTeam, AwayTeam, HomeGoals, AwayGoals).
     config : dict | None
         Reads ``features.half_life_days``, ``model.penalty``,
@@ -284,7 +284,7 @@ def fit(features, config=None, as_of=None, seed_strengths=None):
     as_of : datetime | None
         Only matches strictly before this date are used. Defaults to just after
         the last match, i.e. fit on everything given. **Phase 6 passes a real
-        date here, which is what keeps the walk-forward backtest honest.**
+        date here, which is what keeps the walk-forward backtest free of lookahead.**
     seed_strengths : pandas.DataFrame | None
         Optional Phase 2 strengths (indexed by team, columns attack/defence) used
         as the first starting point. Speeds up and stabilises convergence.
@@ -318,7 +318,7 @@ def fit(features, config=None, as_of=None, seed_strengths=None):
 
     if len(data) == 0:
         raise ConvergenceError(
-            f"No matches dated before {as_of:%Y-%m-%d} — nothing to fit on."
+            f"No matches dated before {as_of:%Y-%m-%d}; nothing to fit on."
         )
 
     teams = sorted(set(data["HomeTeam"]) | set(data["AwayTeam"]))
@@ -452,7 +452,7 @@ def score_matrix(lam, mu, rho, max_goals=10):
 
     ``matrix[x, y]`` is P(home scores x, away scores y). Truncating at
     ``max_goals`` loses a negligible tail, so the matrix is renormalised to sum
-    to exactly 1 — otherwise every derived market probability would be very
+    to exactly 1: otherwise every derived market probability would be very
     slightly low, and those errors would compound through staking.
     """
     goals = np.arange(max_goals + 1)
@@ -468,14 +468,14 @@ def score_matrix(lam, mu, rho, max_goals=10):
     matrix = np.clip(matrix, 0.0, None)
     total = matrix.sum()
     if total <= 0:
-        raise ValueError("Score matrix has no probability mass — check rho.")
+        raise ValueError("Score matrix has no probability mass. Check rho.")
     return matrix / total
 
 
 def market_probabilities(matrix):
     """Derive every market we trade from the score matrix.
 
-    Everything here is a sum over the relevant cells — which is the real payoff
+    Everything here is a sum over the relevant cells, which is the real payoff
     of modelling the full scoreline distribution rather than the result alone:
     one fit prices 1X2, over/under and both-teams-to-score together, and they are
     automatically consistent with each other.
@@ -503,7 +503,7 @@ def predict(model, fixtures, config=None):
     """Market probabilities for a set of fixtures.
 
     A fixture whose team was not in the training data gets the league-average
-    parameters (0 on this log scale) rather than an error — a promoted side must
+    parameters (0 on this log scale) rather than an error: a promoted side must
     be priceable on debut. The ``KnownTeams`` column records whether both teams
     were actually seen, so Phase 5 can decline to stake on a fixture the model
     does not really know.
@@ -565,13 +565,13 @@ def fit_report(model):
                  f"{diagnostics['objective_spread']:>9.2e}")
 
     if not diagnostics["agreed_across_starts"]:
-        lines.append("  WARNING: starts disagree — the optimum may be local. "
+        lines.append("  WARNING: starts disagree, so the optimum may be local. "
                      "Do not trust this fit without investigating.")
 
     if diagnostics.get("rho_at_bound"):
         lines.append(f"  WARNING: rho sits on the edge of its allowed box "
                      f"{diagnostics['rho_box']}. The bound is driving the "
-                     f"estimate, not the data — widen it and refit.")
+                     f"estimate, not the data. Widen it and refit.")
 
     strengths = pd.DataFrame({
         "attack": pd.Series(model["attack"]),
@@ -609,6 +609,6 @@ def save_model(model, config, filename=None):
 
 
 def load_model(path):
-    """Read fitted parameters back — used by Phase 6 and by the tests."""
+    """Read fitted parameters back: used by Phase 6 and by the tests."""
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)

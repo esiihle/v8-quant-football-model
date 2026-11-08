@@ -1,15 +1,15 @@
 """
-Stage 1 — Data ingestion.
+Stage 1: Data ingestion.
 
 Phase 0 (done): load a CSV of historical matches + odds and produce a "shape
 report" so we can eyeball what we've got. Light column-presence checks only.
 
-30 Sep 2026: extended to work with REAL data from football-data.co.uk —
+30 Sep 2026: extended to work with REAL data from football-data.co.uk,
 discovering the league/season files listed in the config, loading several of
 them into one table, and reporting odds coverage (including closing odds, which
 Phase 6 needs for CLV).
 
-2 Oct 2026 — Phase 1: strict validation and the canonical table. The flow is
+2 Oct 2026: Phase 1: strict validation and the canonical table. The flow is
 
     load_many()  ->  validate_raw()  ->  clean()  ->  to_canonical()  ->  save
 
@@ -21,7 +21,7 @@ Two principles run through it:
    so broken that most rows would be dropped stops the run. Silent degradation
    is how a backtest ends up reporting a number nobody can explain.
 2. **Record everything we silently fix.** Rows dropped, results recomputed, odds
-   voided — all counted and reported, never discarded quietly.
+   voided: all counted and reported, never discarded quietly.
 """
 from __future__ import annotations
 
@@ -142,7 +142,7 @@ def load_many(file_entries, config=None):
     pandas.DataFrame
         All matches stacked together, with ``League`` and ``Season`` columns
         added so we can always tell where a row came from. A column present in
-        one season but not another is filled with NaN — which the shape report
+        one season but not another is filled with NaN, which the shape report
         then makes visible, instead of it becoming a silent surprise in Phase 2.
     """
     frames = []
@@ -157,7 +157,7 @@ def load_many(file_entries, config=None):
 
     if not frames:
         raise FileNotFoundError(
-            "No raw data files found. Download them first — run the pipeline "
+            "No raw data files found. Download them first. Run the pipeline "
             "once and it prints the exact URLs."
         )
 
@@ -169,7 +169,7 @@ def build_shape_report(df, config=None):
 
     Reports row/column counts, date coverage, distinct teams, per-season counts,
     and (when a config is supplied) how complete the odds columns are. Written
-    defensively so it works before Phase 1 cleaning — dates may still be
+    defensively so it works before Phase 1 cleaning, when dates may still be
     strings, and some columns may be missing entirely.
     """
     lines = []
@@ -217,10 +217,10 @@ def build_shape_report(df, config=None):
         for label, cols in groups.items():
             present = [c for c in cols if c in df.columns]
             if not present:
-                lines.append(f"{label}: MISSING — columns {cols} not in the data")
+                lines.append(f"{label}: MISSING: columns {cols} not in the data")
             elif len(present) < len(cols):
                 missing = sorted(set(cols) - set(present))
-                lines.append(f"{label}: PARTIAL — missing {missing}")
+                lines.append(f"{label}: PARTIAL: missing {missing}")
             else:
                 worst_null = df[present].isna().mean().max() * 100
                 lines.append(f"{label}: complete (worst null rate {worst_null:.1f}%)")
@@ -240,7 +240,7 @@ def build_shape_report(df, config=None):
 
 
 # ===========================================================================
-# Phase 1 — validation, cleaning, canonical table
+# Phase 1: validation, cleaning, canonical table
 # ===========================================================================
 
 
@@ -352,7 +352,7 @@ def clean(df, config):
 
     # --- 5. Odds ----------------------------------------------------------
     # Out-of-range odds are voided (set to NaN), not dropped: the match still
-    # happened and still trains the model — it simply isn't bettable.
+    # happened and still trains the model; it simply isn't bettable.
     min_odds = rules.get("min_odds", 1.01)
     max_odds = rules.get("max_odds", 1000.0)
     schema = config.get("schema", {})
@@ -373,7 +373,7 @@ def clean(df, config):
 
 
 def drop_duplicate_fixtures(df, config):
-    """Remove repeated fixtures — the same two teams on the same date.
+    """Remove repeated fixtures: the same two teams on the same date.
 
     Duplicates arise from re-downloading a file or from an overlapping season
     range. Left in, they would double-count those matches in the likelihood and
@@ -509,7 +509,7 @@ def run_ingest(df_raw, config, save=True):
     if dropped_fraction > limit:
         raise DataQualityError(
             f"Dropped {dropped_fraction:.1%} of rows, above the {limit:.0%} limit. "
-            "Inspect the raw file before continuing — do not relax this silently."
+            "Inspect the raw file before continuing, do not relax this silently."
         )
 
     table = to_canonical(deduped, config)

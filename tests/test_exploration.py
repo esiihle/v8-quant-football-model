@@ -1,5 +1,5 @@
 """
-Tests for src/exploration.py and scripts/explore.py. [added 29 Oct 2026]
+Tests for src/exploration.py and scripts/explore.py.
 
 The central claim of the exploration is that the answer to "are low scores
 Poisson?" depends on the null: a league-mean Poisson mistakes team mixing for a
@@ -72,7 +72,7 @@ def test_per_match_null_finds_nothing_where_there_is_nothing(config):
 
 def test_league_mean_null_mistakes_team_mixing_for_a_low_score_effect(config):
     """Same data, crude null. A mixture of Poissons with different means has
-    more 0-0s than one Poisson at the average mean - so the league-mean null
+    more 0-0s than one Poisson at the average mean, so the league-mean null
     reports an 'effect' that is only team heterogeneity, and reports it far
     larger than the per-match null does."""
     table = simulate_seasons(rho=0.0, seed=1)
@@ -84,7 +84,7 @@ def test_league_mean_null_mistakes_team_mixing_for_a_low_score_effect(config):
 
 def test_a_real_dixon_coles_effect_is_found_with_the_right_signs(config):
     """With rho = -0.15 the per-match null must see 0-0 and 1-1 MORE often
-    than Poisson and 1-0 and 0-1 LESS often - the direction tau actually
+    than Poisson and 1-0 and 0-1 LESS often, the direction tau actually
     moves them (not 'all four up', which the notebook used to say)."""
     table = simulate_seasons(rho=-0.15, seed=2)
     departures, rhos = ex.low_score_departures(table, config)
@@ -208,7 +208,7 @@ def test_sample_data_cannot_reach_a_published_folder(explore_script, monkeypatch
 
 def test_the_notebook_runner_refuses_without_real_data(monkeypatch, capsys):
     """scripts/run_notebook.py must not execute, let alone save, a notebook on
-    the bundled sample - the fault it was added to stop. [29 Oct 2026]"""
+    the bundled sample, the fault it was added to stop."""
     spec = importlib.util.spec_from_file_location(
         "run_notebook", REPO_ROOT / "scripts" / "run_notebook.py")
     module = importlib.util.module_from_spec(spec)

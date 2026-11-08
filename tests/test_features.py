@@ -1,5 +1,5 @@
 """
-Phase 2 tests — feature engineering.
+Phase 2 tests: feature engineering.
 
 The headline test is ``test_features_do_not_use_the_future``. Everything else
 here checks a property of the maths; that one checks the property the whole
@@ -45,7 +45,7 @@ def make_matches(n_rounds=12, seed=0, strong_team="Team A"):
             home_rate = 2.6 if home == strong_team else 1.2
             away_rate = 2.2 if away == strong_team else 0.9
             hg, ag = int(rng.poisson(home_rate)), int(rng.poisson(away_rate))
-            # Shots track team quality too, as they do in real football — so the
+            # Shots track team quality too, as they do in real football, so the
             # xG proxy carries the same signal as the goals, not noise.
             hst, ast_ = int(rng.poisson(home_rate * 3)), int(rng.poisson(away_rate * 3))
             rows.append({
@@ -95,7 +95,7 @@ def test_no_data_means_the_prior_exactly():
 
 
 def test_sample_equal_to_k_lands_halfway():
-    """With n = k, weight is 0.5 — the defining property of this shrinkage."""
+    """With n = k, weight is 0.5: the defining property of this shrinkage."""
     result = features.shrink(estimate=2.0, n_matches=8, prior=1.0, k=8)
     assert result == pytest.approx(1.5)
 
@@ -227,7 +227,7 @@ def test_features_do_not_use_the_future(config):
     pd.testing.assert_frame_equal(
         a[strength_cols], b[strength_cols],
         check_exact=False, rtol=1e-9,
-        obj="features changed when future matches were added — LOOKAHEAD LEAK",
+        obj="features changed when future matches were added, LOOKAHEAD LEAK",
     )
 
 
@@ -241,7 +241,7 @@ def test_conversion_rate_is_measured_from_history_only(config):
     """The leak this module had on 9 Oct: rates fitted on the whole file.
 
     A conversion rate measured over all matches encodes how the season finished.
-    Measured over the first half only, it must differ — and `build_features` must
+    Measured over the first half only, it must differ, and `build_features` must
     use the second kind.
     """
     matches = make_matches(n_rounds=16, seed=5)
@@ -263,7 +263,7 @@ def test_no_shot_history_still_builds_features(config):
     assert len(feats) == len(matches)
 
 
-# --- Added 27 Oct 2026: the minimum-weight cutoff ---------------------------
+# --- The minimum-weight cutoff ---------------------------
 
 def test_min_weight_drops_only_matches_below_it():
     """A cutoff of 0.25 at a 180-day half-life is exactly two half-lives: 360

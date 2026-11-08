@@ -15,7 +15,7 @@ So this study does not ask *is the model profitable*. It asks a prior question:
     When none exists, does it correctly report none?**
 
 That is instrument validation, and it is the thing you must do before trusting
-any backtest — including this project's own.
+any backtest, including this project's own.
 
 HOW
 ---
@@ -42,7 +42,7 @@ WHAT THIS IS NOT
 ----------------
 This is simulated data and it makes **no claim about real betting markets**.
 Scenario B's edge exists because it was put there deliberately. Nothing here
-says such an edge exists in practice — the real-data run is what addresses that,
+says such an edge exists in practice, the real-data run is what addresses that,
 and it is reported separately.
 
 Usage
@@ -91,7 +91,7 @@ MAX_GOALS = 10
 def true_probabilities(home_attack, home_defence, away_attack, away_defence):
     """The true 1X2 probabilities and score grid for one fixture.
 
-    This is a bivariate Poisson with the Dixon-Coles tau correction — the same
+    This is a bivariate Poisson with the Dixon-Coles tau correction, the same
     family the model fits. That is deliberate: the study is testing the
     BACKTESTER, not whether Dixon-Coles is the right model for football. Giving
     the model a correctly specified world isolates the question being asked.
@@ -121,7 +121,7 @@ def true_probabilities(home_attack, home_defence, away_attack, away_defence):
 
 # No real bookmaker prices a single outcome beyond this, however certain the
 # result looks: the liability is not worth the counterparty risk. Without the
-# cap the simulator emits decimal odds below 1.00 on extreme fixtures — an
+# cap the simulator emits decimal odds below 1.00 on extreme fixtures: an
 # impossible price, and one `validation.min_odds` would reject if it arrived in
 # a real file. A simulator that produces data its own pipeline would refuse is
 # not simulating the thing it claims to.
@@ -132,7 +132,7 @@ MIN_DECIMAL_ODDS = 1.01
 def load_margin_shin(probabilities, margin):
     """Load a margin onto fair probabilities the way Shin's model says books do.
 
-    Added 26 Oct 2026. The simulator used to load margin PROPORTIONALLY
+    The simulator used to load margin PROPORTIONALLY
     (every outcome scaled by 1 + margin), while the pipeline de-vigs with
     Shin, which assumes the margin sits mostly on longshots. Reading a
     proportional book with Shin over-shrinks longshots, and more so at the
@@ -165,7 +165,7 @@ def price(probabilities, margin, noise, rng, shocks=None):
     `noise` is the bookmaker's own estimation error. A real book is not a
     perfect estimate of the truth; it is a good estimate with a margin on top.
 
-    `shocks` [added 26 Oct 2026] lets the caller supply the three log-errors
+    `shocks` lets the caller supply the three log-errors
     directly instead of drawing fresh ones, so the closing price can SHARE
     part of the opening price's error. See OPENING_ERROR_CORRECTED.
     """
@@ -174,7 +174,7 @@ def price(probabilities, margin, noise, rng, shocks=None):
     distorted = np.asarray(probabilities, dtype=float) * np.exp(shocks)
     distorted = distorted / distorted.sum()
 
-    # Cap, then renormalise, then load the margin — in that order, so the book
+    # Cap, then renormalise, then load the margin, in that order, so the book
     # still sums to 1 + margin after the cap has moved mass around.
     distorted = np.clip(distorted, 0.004, MAX_SINGLE_OUTCOME)
     distorted = load_margin_shin(distorted / distorted.sum(), margin)
@@ -184,7 +184,7 @@ def price(probabilities, margin, noise, rng, shocks=None):
 
 # --- How much of the opening price's error the closing price corrects ---------
 #
-# Added 26 Oct 2026, after the CLV decomposition exposed a flaw in this file.
+# Added after the CLV decomposition exposed a flaw in this file.
 #
 # The opening and closing prices used to carry INDEPENDENT errors around the
 # truth, so the close corrected 100% of the opening's error. That makes any
@@ -216,7 +216,7 @@ def selection_movement(opening, closing, devig_method="shin", share=0.25):
     """Market movement on the longest `share` of opening prices, with no model.
 
     The calibration statistic. It needs no model, no staking and no results -
-    only two books - so it can be measured identically on real and simulated
+    only two books, so it can be measured identically on real and simulated
     data, and nothing the model does can leak into it.
 
     Parameters
@@ -246,7 +246,7 @@ def build_market(bias, n_seasons, seed, close_corrects=None):
     `bias` is the factor the bookmaker applies to home attack strength when
     pricing: 1.00 is an efficient book, 0.80 badly underprices home teams.
 
-    Returns (matches, mean_mispricing_in_probability_points) — the second value
+    Returns (matches, mean_mispricing_in_probability_points): the second value
     is what makes the result interpretable. "A bias factor of 0.90" means
     nothing to a reader; "the book is wrong by 2.4 probability points on the
     home win" is the number that can be compared against a real market.
@@ -336,7 +336,7 @@ def build_market(bias, n_seasons, seed, close_corrects=None):
 
 
 def decomposition_fields(clv_result):
-    """CLV split into margin paid and market movement [added 26 Oct 2026].
+    """CLV split into margin paid and market movement.
 
     The real-data run showed its negative CLV was all margin, with market
     movement indistinguishable from zero. The efficient-book arm here also shows
@@ -434,7 +434,7 @@ BIAS_LEVELS = [1.00, 0.95, 0.88, 0.80]
 def significance(result):
     """Is the CLV significantly positive by this project's own rule?
 
-    The whole bootstrap interval above zero — the same test applied to the
+    The whole bootstrap interval above zero, the same test applied to the
     real-data claim, used here where the right answer is known in advance.
     """
     if result.get("bets", 0) == 0:
@@ -490,7 +490,7 @@ def draw_detection_chart(rows, noise, threshold, args, out_dir):
                     textcoords="offset points", fontsize=9, color=GOOD,
                     fontweight="bold", va="top")
 
-    ax.annotate("no edge exists here —\nthe pipeline correctly reports none",
+    ax.annotate("no edge exists here: \nthe pipeline correctly reports none",
                 xy=(x[0], y[0]), xytext=(14, -6), textcoords="offset points",
                 fontsize=9, color=INK_SOFT, va="top")
 
@@ -531,7 +531,7 @@ CALIBRATION_SEASONS = 6        # simulated seasons per grid point (2,280 matches
 
 
 def calibrate(config, args):
-    """Choose OPENING_ERROR_CORRECTED from real data. [added 26 Oct 2026]
+    """Choose OPENING_ERROR_CORRECTED from real data.
 
     Measures `selection_movement` on every season file in data/raw (the real
     target), then on the simulated EFFICIENT book for each share in
@@ -653,7 +653,7 @@ def main():
     levels = args.levels or BIAS_LEVELS
     out_dir = Path(args.out) if args.out else REPO_ROOT / "docs" / "charts"
 
-    print("\nV8 — simulation study: how big must an edge be before this")
+    print("\nV8 simulation study: how big must an edge be before this")
     print("     backtester can see it?")
     print(f"  fingerprint: {logging_setup.run_fingerprint(config)}")
     print(f"  {args.seasons} season(s) per level, seed {args.seed}\n")
@@ -688,7 +688,7 @@ def main():
         print()
 
     # --- the control: a model that knows nothing ------------------------
-    print("  CONTROL — an efficient book bet by a model with random probabilities")
+    print("  CONTROL: an efficient book bet by a model with random probabilities")
     efficient_market, _ = build_market(1.00, args.seasons, args.seed)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -702,7 +702,7 @@ def main():
             print(f"    = margin {noise['margin_paid']:+.2%}  +  movement "
                   f"{noise['movement']:+.2%} "
                   f"[{noise['movement_low']:+.2%}, {noise['movement_high']:+.2%}]")
-    print(f"    -> {'FAIL — invented an edge' if noise['detected'] else 'PASS — no edge reported'}\n")
+    print(f"    -> {'FAIL, invented an edge' if noise['detected'] else 'PASS, no edge reported'}\n")
 
     # --- the two things that must hold ----------------------------------
     efficient = next(r for r in rows if r["bias"] >= 1.0)
@@ -734,7 +734,7 @@ def main():
         "run_fingerprint": logging_setup.run_fingerprint(config),
         "no_false_positive": bool(no_false_positive),
         "detection_threshold_points": threshold,
-        # How the simulator's prices were built [added 26 Oct 2026]: margin
+        # How the simulator's prices were built: margin
         # loaded Shin-style, and the share of opening error the close corrects.
         "margin_loading": "shin",
         "opening_error_corrected": OPENING_ERROR_CORRECTED,

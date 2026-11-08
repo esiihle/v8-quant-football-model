@@ -1,9 +1,9 @@
 r"""
-Stage 6 — Closing-line value (CLV).  [Built in Phase 6, 18 Oct 2026]
+Stage 6: Closing-line value (CLV). 
 
 **The headline metric of this project.**
 
-CLV compares the odds we took against the **closing** odds — the last price
+CLV compares the odds we took against the **closing** odds, the last price
 before kick-off, after every injury report, team sheet and professional opinion
 has been absorbed. The closing line is the market's most efficient estimate of a
 match's probabilities, and that is precisely why beating it means something.
@@ -30,14 +30,14 @@ Three ways to express it, and what each is for
 1. **Odds ratio**, :math:`O_t / O_c - 1`. Took 3.50 where the close was 3.00:
    +16.7%. Intuitive and the usual way it is quoted.
 2. **Probability points**, de-vigged closing probability minus de-vigged taken
-   probability. The honest version for averaging, because odds ratios are
+   probability. The right version to average, because odds ratios are
    asymmetric: a price moving 2.00 → 1.80 and 1.80 → 2.00 are the same size of
    move in probability and look very different as ratios.
 3. **Beat rate**, the share of bets where the price moved your way. Robust to
    outliers, and the easiest figure to defend.
 
 All three are reported, with **bootstrap confidence intervals** rather than bare
-point estimates — a mean CLV of +1.5% means nothing without knowing whether the
+point estimates: a mean CLV of +1.5% means nothing without knowing whether the
 interval includes zero.
 
 A caution that belongs in the open
@@ -79,8 +79,8 @@ def clv_per_bet(bets, devig_method="shin"):
     Parameters
     ----------
     bets : pandas.DataFrame
-        Needs ``odds`` (taken), ``closing_odds``, ``outcome``, and — for the
-        probability-point version — the full closing market
+        Needs ``odds`` (taken), ``closing_odds``, ``outcome``, and, for the
+        probability-point version: the full closing market
         (``closing_home``, ``closing_draw``, ``closing_away``) so the closing
         line can be de-vigged properly. Without the full market, only the odds
         ratio and beat rate are computed.
@@ -112,7 +112,7 @@ def clv_per_bet(bets, devig_method="shin"):
     # 3. Beat rate: did the price move our way at all?
     out["beat_close"] = np.where(usable, taken > closing, np.nan)
 
-    # 2. Probability points — the version worth averaging. Needs the whole
+    # 2. Probability points: the version worth averaging. Needs the whole
     # closing market to de-vig, because a single closing price carries no
     # information about the closing margin.
     full_market = all(c in out.columns for c in
@@ -128,7 +128,7 @@ def clv_per_bet(bets, devig_method="shin"):
             index = OUTCOME_ORDER.index(bet["outcome"])
 
             # We beat the close when the closing market thinks the outcome MORE
-            # likely than the price we took implied — i.e. we were paid as though
+            # likely than the price we took implied, i.e. we were paid as though
             # it were less likely than the market finally decided.
             taken_implied = 1.0 / float(bet["odds"])
             points[position] = float(fair_closing[index]) - taken_implied
@@ -146,7 +146,7 @@ def bootstrap_interval(values, statistic=np.mean, n_resamples=2000,
     """Percentile bootstrap interval for a statistic.
 
     Resampling rather than a normal approximation, because CLV distributions are
-    skewed — a handful of large price moves dominate the tail, and a symmetric
+    skewed: a handful of large price moves dominate the tail, and a symmetric
     interval would misrepresent them.
 
     Returns
@@ -208,7 +208,7 @@ def clv_summary(bets, config=None):
 
     # --- The verdict ------------------------------------------------------
     # Probability points is AUTHORITATIVE where available. The odds ratio is
-    # asymmetric — a price halving scores -50% while a doubling scores +100% —
+    # asymmetric: a price halving scores -50% while a doubling scores +100%,
     # so its mean is pulled upward by its own right tail. On the first real
     # walk-forward run the two measures disagreed and both intervals excluded
     # zero: ratio +1.82% [+0.81%, +3.00%], points -0.67% [-0.87%, -0.47%]. The
@@ -269,10 +269,10 @@ def clv_summary(bets, config=None):
 def decompose_clv(with_clv, n_resamples=2000, confidence=0.95, seed=42):
     """Split CLV in probability points into the margin paid and the market's move.
 
-    Why [added 25 Oct 2026]
+    Why
     -----------------------
     CLV in probability points compares the closing market's FAIR probability
-    with the RAW implied probability of the price taken - and the raw price
+    with the RAW implied probability of the price taken, and the raw price
     includes the bookmaker's margin. So even a bettor with no information at
     all, whose prices the market never moves against, shows negative CLV equal
     to the margin. An identity makes the two parts separable:
@@ -333,7 +333,7 @@ def clv_by_band(bets, column="edge", n_bands=5, config=None):
     The sharpest diagnostic available. If the model has real information, the
     bets where it claimed the *most* edge should show the *most* CLV. A flat
     profile means the edge estimate carries no signal even if the average CLV is
-    positive — the model is right on average and cannot tell you where.
+    positive: the model is right on average and cannot tell you where.
     """
     with_clv = clv_per_bet(
         bets, (config or {}).get("staking", {}).get("devig_method", "shin"))
@@ -352,7 +352,7 @@ def clv_by_band(bets, column="edge", n_bands=5, config=None):
     }
     # Probability points is the authoritative measure (see clv_summary), so it
     # belongs in the band table too. Until 21 Oct 2026 this function reported
-    # only the odds ratio — the very measure the 18 Oct bug showed can read
+    # only the odds ratio: the very measure the 18 Oct bug showed can read
     # positive while the model is losing to the close. A diagnostic that can
     # only be read in the misleading units is not a diagnostic.
     if "clv_probability_points" in with_clv.columns:
@@ -370,7 +370,7 @@ def clv_by_band(bets, column="edge", n_bands=5, config=None):
 
 
 def clv_report(summary, band_table=None):
-    """The CLV report — the lead chart's data and the project's headline claim."""
+    """The CLV report: the lead chart's data and the project's headline claim."""
     confidence = summary["confidence_level"]
     lines = ["Closing-line value (CLV)", "-" * 24]
     lines.append(f"  {'bets':<34} {summary['bets']:>10,}")
@@ -424,7 +424,7 @@ def clv_report(summary, band_table=None):
         lines.append("")
         lines.append("  Probability points is authoritative.")
         if parts and parts["movement_verdict"] == "toward":
-            # Added 25 Oct 2026. The ratio compares the price taken with the
+            # The ratio compares the price taken with the
             # closing PRICE, so the margin is in both and roughly cancels; the
             # points measure compares it with the closing FAIR probability, so
             # the margin is charged. A positive ratio beside negative points is
@@ -432,13 +432,13 @@ def clv_report(summary, band_table=None):
             lines.append("  Here the disagreement is the MARGIN: the market did "
                          "move toward these")
             lines.append("  bets, so the price shortened and the odds ratio is "
-                         "positive - but by less")
+                         "positive, but by less")
             lines.append("  than the margin paid, which only probability points "
                          "charges.")
         else:
-            lines.append("  The odds ratio is ASYMMETRIC — a price halving "
+            lines.append("  The odds ratio is ASYMMETRIC: a price halving "
                          "scores -50% while a")
-            lines.append("  doubling scores +100% — so its mean is pulled upward "
+            lines.append("  doubling scores +100%, so its mean is pulled upward "
                          "by its own right")
             lines.append("  tail. Check the distribution above: if the best bet "
                          "dwarfs the worst, the")
@@ -471,7 +471,7 @@ def clv_report(summary, band_table=None):
                          "moved neither toward")
             lines.append("  nor away from these prices. That is what a model with "
                          "no information")
-            lines.append("  looks like - it pays the margin and finds nothing to "
+            lines.append("  looks like: it pays the margin and finds nothing to "
                          "recover it with.")
         elif verdict == "toward":
             lines.append("  The market DID move toward these bets, but by less "
@@ -481,7 +481,7 @@ def clv_report(summary, band_table=None):
         else:
             lines.append("  The model is taking prices the market later moves "
                          "AWAY from, so there is")
-            lines.append("  no edge — whatever the ROI happens to say in either "
+            lines.append("  no edge: whatever the ROI happens to say in either "
                          "direction.")
 
     else:
@@ -502,11 +502,11 @@ def clv_report(summary, band_table=None):
             lines.append(f"  Beat rate {beat['estimate']:.1%} is BELOW 50% with "
                          "the interval clear of it.")
             if parts and parts["movement_verdict"] == "none":
-                # Added 25 Oct 2026. The beat rate compares raw prices, so it
+                # The beat rate compares raw prices, so it
                 # absorbs any margin gap between the book bet into and the
                 # closing book (Bet365 ~5.4% vs Pinnacle ~2.9% on the EPL
                 # data). With zero movement, that gap is what it is measuring.
-                lines.append("  Not because the market moved - the decomposition "
+                lines.append("  Not because the market moved; the decomposition "
                              "shows it did not. The")
                 lines.append("  price taken carries more margin than the closing "
                              "price, so it is shorter")

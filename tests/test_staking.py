@@ -1,11 +1,11 @@
 """
-Phase 5 tests — value detection, Kelly sizing and bankroll simulation.
+Phase 5 tests: value detection, Kelly sizing and bankroll simulation.
 
 The two tests worth reading first:
 
-* `test_kelly_fraction_by_hand` — the formula, checked against arithmetic you
+* `test_kelly_fraction_by_hand`: the formula, checked against arithmetic you
   can do on paper.
-* `test_two_times_kelly_has_zero_expected_log_growth` — the result that justifies
+* `test_two_times_kelly_has_zero_expected_log_growth`: the result that justifies
   fractional Kelly. Double the optimal stake and all the edge converts to
   variance; beyond that you lose money with a real edge in hand.
 
@@ -105,7 +105,7 @@ def test_kelly_grows_with_edge():
 def test_kelly_maximises_expected_log_growth():
     """The defining property, verified numerically rather than assumed.
 
-    Kelly is not 'a sensible stake' — it is the unique maximiser of expected log
+    Kelly is not 'a sensible stake'; it is the unique maximiser of expected log
     growth. Any other fraction must do worse.
     """
     p, odds = 0.58, 2.1
@@ -119,7 +119,7 @@ def test_kelly_maximises_expected_log_growth():
 
 
 def test_zero_growth_point_is_near_two_times_kelly():
-    """The result that justifies fractional Kelly — stated precisely.
+    """The result that justifies fractional Kelly, stated precisely.
 
     "Twice Kelly gives zero growth" is usually quoted as an identity. It is not.
     It is exact in the small-edge (Gaussian / continuous-rebalancing) limit,
@@ -202,7 +202,7 @@ def test_impossible_odds_are_refused():
 # =========================================================================
 
 def test_overround_measures_the_margin():
-    """Three outcomes at 2.0 each implies 1.5 — a 50% book."""
+    """Three outcomes at 2.0 each implies 1.5: a 50% book."""
     assert staking.overround([2.0, 2.0, 2.0]) == pytest.approx(0.5)
 
 
@@ -223,7 +223,7 @@ def test_shin_gives_longshots_lower_probability_than_proportional():
     """The favourite-longshot bias, and why the de-vig choice matters.
 
     Bookmakers load more margin onto longshots. Proportional de-vigging assumes
-    they do not, so it OVERSTATES longshot probabilities — which is exactly the
+    they do not, so it OVERSTATES longshot probabilities, which is exactly the
     direction that manufactures phantom value on big prices, where a naive model
     tends to think it has found something.
     """
@@ -260,7 +260,7 @@ def test_a_model_matching_the_fair_market_finds_no_value(config):
     """The most important behavioural test here.
 
     The model IS the fair market, and the odds carry a 5% margin. Every bet
-    therefore has negative expected value — the margin is a real cost the model
+    therefore has negative expected value: the margin is a real cost the model
     has no advantage to pay it with. A correct staking rule stakes nothing.
     """
     market = make_market(400, seed=1, true_edge=0.0, margin=0.05)

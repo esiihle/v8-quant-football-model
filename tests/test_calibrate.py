@@ -1,11 +1,11 @@
 """
-Phase 4 tests — probability calibration and proper scoring rules.
+Phase 4 tests: probability calibration and proper scoring rules.
 
 Two groups matter most:
 
-* **Identities** — Brier and log-loss computed by hand on tiny examples, so the
+* **Identities**: Brier and log-loss computed by hand on tiny examples, so the
   numbers everything else is judged by are themselves checked.
-* **Discipline** — a calibration map must be fitted on earlier matches and
+* **Discipline**: a calibration map must be fitted on earlier matches and
   judged on later ones. `test_in_sample_calibration_flatters_itself` shows what
   happens when that rule is broken, which is the whole reason the rule exists.
 
@@ -161,7 +161,7 @@ def test_reliability_table_matches_reality_for_a_calibrated_model():
     band holding 200 matches at a realised rate near 0.5 has a standard error of
     sqrt(0.25/200) = 0.035, so a gap of 0.06 there is ordinary while the same gap
     in a 2,000-match band would be a real miscalibration. Each band is therefore
-    checked against three standard errors of its own count — which is also why a
+    checked against three standard errors of its own count, which is also why a
     reliability diagram is always read with the counts beside it.
     """
     rng = np.random.default_rng(1)
@@ -244,7 +244,7 @@ def test_isotonic_corrects_a_shape_platt_cannot():
 
 
 def test_calibrator_is_plain_serialisable_data():
-    """The map is part of the model, so it must survive JSON — no pickles."""
+    """The map is part of the model, so it must survive JSON, no pickles."""
     import json
 
     rng = np.random.default_rng(6)
@@ -340,7 +340,7 @@ def test_in_sample_calibration_flatters_itself(config):
     """Why the time split exists, demonstrated rather than asserted.
 
     Fitting a calibration map and then scoring it on the SAME matches shows a
-    larger improvement than scoring it on later ones — because the map has seen
+    larger improvement than scoring it on later ones, because the map has seen
     the answers. The in-sample number is not a forecast of anything.
     """
     predictions, results = make_predictions(1200, seed=8, overconfidence=1.7)
@@ -359,7 +359,7 @@ def test_in_sample_calibration_flatters_itself(config):
     flattered_gain = raw_in_sample - cheating_in_sample
 
     assert flattered_gain > honest["improvement"]["log_loss"], (
-        "in-sample calibration should look better than it is — if it does not, "
+        "in-sample calibration should look better than it is, if it does not, "
         "this demonstration is no longer demonstrating anything"
     )
 

@@ -1,5 +1,5 @@
 """
-The canonical table definition — the contract between Phase 1 and everything after it.
+The canonical table definition: the contract between Phase 1 and everything after it.
 
 Why a separate module: downstream stages (features, model, backtest) must never
 reach for a raw football-data.co.uk column name like ``FTHG``. They read these
@@ -13,7 +13,7 @@ from __future__ import annotations
 # Canonical column order. Downstream code may rely on these names existing.
 CANONICAL_COLUMNS = [
     "MatchID",       # stable identifier: league_season_date_home_away
-    "MatchDate",     # datetime64 — parsed, never a string
+    "MatchDate",     # datetime64: parsed, never a string
     "League",        # e.g. E0
     "Season",        # e.g. 2425
     "HomeTeam",
@@ -28,7 +28,7 @@ CANONICAL_COLUMNS = [
     "OddsH",         # the odds we would bet into
     "OddsD",
     "OddsA",
-    "CloseH",        # closing odds — the CLV benchmark in Phase 6
+    "CloseH",        # closing odds: the CLV benchmark in Phase 6
     "CloseD",
     "CloseA",
 ]

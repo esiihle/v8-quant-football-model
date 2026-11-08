@@ -1,6 +1,6 @@
 """
 Tests for src/benchmark.py: the model against the market on the same matches.
-[added 5 Nov 2026]
+
 
 Every test builds forecasts whose quality is known by construction, so the
 comparison can be checked against the truth rather than against itself.

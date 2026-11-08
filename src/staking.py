@@ -1,5 +1,5 @@
 r"""
-Stage 5 — Staking.  [Built in Phase 5, 14 Oct 2026]
+Stage 5: Staking. 
 
 Turns ``(calibrated probability, market odds)`` into decisions: which bets carry
 value, how much to stake on each, and what the bankroll would have done.
@@ -10,10 +10,10 @@ Bookmaker odds do not sum to 100%; the excess is the margin. That leaves two
 market probabilities for every outcome, and conflating them is the subtlest
 mistake in this whole pipeline:
 
-* **Raw implied**, :math:`1/o` — what the price pays. A bet has positive expected
+* **Raw implied**, :math:`1/o`: what the price pays. A bet has positive expected
   value **if and only if** the model's probability exceeds this. The margin is a
   real cost and must be overcome, not removed.
-* **De-vigged ("fair")** — the market's honest estimate of the true probability,
+* **De-vigged ("fair")**: the market's own estimate of the true probability,
   with the margin stripped out.
 
 A bet can beat the de-vigged probability and still lose money, because the payout
@@ -23,7 +23,7 @@ has expected value of **-2.7%**.
 
 So:
 
-1. **The value test uses the raw price**, which is what Kelly already does —
+1. **The value test uses the raw price**, which is what Kelly already does,
    :math:`f^{*} > 0` exactly when :math:`p > 1/o`. ``staking.min_edge`` is
    measured there too.
 2. **The de-vigged probability is a diagnostic**: it measures how far the model
@@ -31,7 +31,7 @@ So:
    value is built on. It never decides whether to bet.
 3. **Size with fractional Kelly**, then simulate the bankroll.
 
-(The first version of this module had this backwards — it tested value against
+(The first version of this module had this backwards: it tested value against
 the de-vigged probability, which is the permissive direction and would have
 flagged negative-EV bets as value. `test_a_bet_beating_fair_but_not_raw_is_not_value`
 pins the corrected behaviour.)
@@ -47,13 +47,13 @@ probability :math:`p`, :math:`q = 1 - p`:
 This is the fraction of the bankroll that maximises expected *logarithmic*
 growth, which is the same as maximising the long-run geometric growth rate.
 
-**Kelly assumes you know p exactly.** You do not — :math:`p` here is the output
+**Kelly assumes you know p exactly.** You do not: :math:`p` here is the output
 of a fitted model, and it carries estimation error. That is not a footnote, it is
 the most important fact in this module, because the penalty for overestimating
 :math:`p` is sharply asymmetric:
 
 * staking :math:`f^{*}` maximises growth;
-* staking roughly :math:`2f^{*}` gives **zero** expected log growth — all of the
+* staking roughly :math:`2f^{*}` gives **zero** expected log growth: all of the
   edge converted into variance and nothing else;
 * staking beyond that loses money *even when the edge is real*.
 
@@ -61,15 +61,15 @@ The "2x" figure deserves precision, because it is usually quoted as an identity
 and is not one. It is exact in the small-edge (Gaussian / continuous-rebalancing)
 limit, where growth is :math:`f\mu - f^2\sigma^2/2` and vanishes at
 :math:`f = 2\mu/\sigma^2`. For discrete bets the zero-growth point is *near*
-2x and depends on the odds — measured in the tests, it runs from about 1.95x at
+2x and depends on the odds (measured in the tests, it runs from about 1.95x at
 even money with a large edge to 2.10x on a 5.0 shot, converging on exactly 2.000x
-as the edge shrinks. `test_zero_growth_point_is_near_two_times_kelly` records
+as the edge shrinks). `test_zero_growth_point_is_near_two_times_kelly` records
 those numbers.
 
 Either way the practical conclusion stands: if your probabilities are 20% too
 optimistic, full Kelly is already betting about double what it should, and you
-are at the zero-growth boundary with a genuine edge in hand. That — not variance
-reduction — is the argument for staking a fraction.
+are at the zero-growth boundary with a genuine edge in hand. That, not variance
+reduction, is the argument for staking a fraction.
 
 ``staking.kelly_fraction`` defaults to 0.25. Quarter-Kelly survives being wrong
 about :math:`p` by a factor of four before reaching the zero-growth boundary.
@@ -111,7 +111,7 @@ def devig_proportional(odds):
     .. math:: p_i = \\frac{1/o_i}{\\sum_j 1/o_j}
 
     Simple, fast, and it makes one strong assumption: that the bookmaker applies
-    its margin *proportionally* across outcomes. Bookmakers do not — they load
+    its margin *proportionally* across outcomes. Bookmakers do not, they load
     more margin onto longshots, because that is where recreational money goes.
     So this method systematically **overstates longshot probabilities**, which is
     exactly the direction that creates phantom value on big-price bets.
@@ -205,7 +205,7 @@ def kelly_fraction(probability, odds):
 
     .. math:: f^{*} = \\frac{bp - q}{b} = \\frac{po - 1}{o - 1}
 
-    Returns a NEGATIVE number when the bet has no edge — which is the formula
+    Returns a NEGATIVE number when the bet has no edge, which is the formula
     telling you to take the other side, and in a market where you cannot, to
     stake nothing. Callers clip at zero rather than the formula doing it, so the
     size of the *negative* edge stays available for diagnostics.
@@ -262,8 +262,8 @@ def stake_size(model_probability, odds, config=None):
     o = float(odds)
 
     # Edge against the raw price, which is both the EV break-even and Kelly's own
-    # threshold. A single outcome cannot be de-vigged on its own anyway — the
-    # whole market is needed for that — and de-vigging is not what decides a bet.
+    # threshold. A single outcome cannot be de-vigged on its own anyway: the
+    # whole market is needed for that, and de-vigging is not what decides a bet.
     implied = 1.0 / o
     edge = p_model - implied
 
@@ -307,7 +307,7 @@ def find_value_bets(predictions, config=None):
 
     `predictions` must carry the model's 1X2 probabilities, the odds we would bet
     into (``OddsH/D/A``) and the realised ``Result``. One row per bet, not per
-    match, because two outcomes of the same match can both look like value — and
+    match, because two outcomes of the same match can both look like value, and
     if they do, that is itself worth seeing.
 
     The whole market is de-vigged together, which is the only way to do it
@@ -340,12 +340,12 @@ def find_value_bets(predictions, config=None):
 
             # EDGE is measured against the RAW price, because that is what the
             # bet pays. p > 1/o is exactly the condition for positive expected
-            # value, and exactly when Kelly turns positive — the two agree by
+            # value, and exactly when Kelly turns positive: the two agree by
             # construction, which is the point.
             edge = p_model - raw
 
             # DISAGREEMENT is measured against the de-vigged price: how far the
-            # model departs from the market's own honest estimate. It is a
+            # model departs from the market's own estimate. It is a
             # diagnostic (and the basis of Phase 6's CLV), never a bet trigger.
             # A bet can have positive disagreement and negative edge, and that
             # bet loses money.
@@ -412,7 +412,7 @@ def simulate_bankroll(bets, config=None):
     Returns
     -------
     (pandas.DataFrame, dict)
-        The per-bet ledger and the summary — final bankroll, ROI, yield, hit
+        The per-bet ledger and the summary, final bankroll, ROI, yield, hit
         rate, maximum drawdown.
     """
     config = config or {}
@@ -476,7 +476,7 @@ def simulate_bankroll(bets, config=None):
 
         peak = max(peak, bankroll)
         # Drawdown as a share of the previous peak, which is how a bankroll
-        # drop is actually experienced — a 30% fall from a high is 30% whatever
+        # drop is actually experienced: a 30% fall from a high is 30% whatever
         # the starting figure was.
         max_drawdown = max(max_drawdown, (peak - bankroll) / peak)
 
@@ -551,7 +551,7 @@ def staking_report(bets, ledger, summary, config=None):
 
     if summary["ruined"]:
         lines.append("")
-        lines.append("  RUINED — the bankroll reached zero. Whatever the ROI said")
+        lines.append("  RUINED: the bankroll reached zero. Whatever the ROI said")
         lines.append("  before that point, this staking plan is not usable.")
     if summary["days_scaled_by_cap"]:
         lines.append(f"    ({summary['days_scaled_by_cap']} days scaled down by "
@@ -559,8 +559,8 @@ def staking_report(bets, ledger, summary, config=None):
 
     lines.append("")
     lines.append("  Reminder: these numbers come from a FIXED model fitted on all")
-    lines.append("  the data. They are a staking sanity check, not a result —")
-    lines.append("  Phase 6's walk-forward backtest produces the honest version.")
+    lines.append("  the data. They are a staking sanity check, not a result, ")
+    lines.append("  Phase 6's walk-forward backtest produces the out-of-sample version.")
     return "\n".join(lines)
 
 

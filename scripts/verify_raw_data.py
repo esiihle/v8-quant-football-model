@@ -3,7 +3,7 @@
 Check whether a candidate data file can actually drive this pipeline.
 
 football-data.co.uk is the intended source, but it is a betting-odds site and
-is blocked on some networks. Mirrors exist — Kaggle, GitHub, assorted archives —
+is blocked on some networks. Mirrors exist, Kaggle, GitHub, assorted archives,
 and they vary in quality: some drop the closing-odds columns, some cover
 different seasons, some have been "cleaned" in ways that silently change the
 numbers.
@@ -11,7 +11,7 @@ numbers.
 This script answers one question about any candidate file: **will V8 produce a
 real result from it, or a plausible-looking fake one?** It checks the columns
 the pipeline needs, the shape of the data, and the internal consistency of the
-odds — because a file with the right headers and nonsense underneath is the
+odds, because a file with the right headers and nonsense underneath is the
 failure mode that matters.
 
 Usage
@@ -23,7 +23,7 @@ Usage
 Exit codes
 ----------
     0  usable
-    1  unusable — the reasons are printed
+    1  unusable: the reasons are printed
     2  usable, but with warnings worth reading
 """
 import argparse
@@ -64,7 +64,7 @@ def describe(path, config, quiet=False):
     facts["size_kb"] = round(size_kb, 1)
     if size_kb < 10:
         failures.append(
-            f"only {size_kb:.1f} KB — this is almost certainly a saved error "
+            f"only {size_kb:.1f} KB: this is almost certainly a saved error "
             "page or a redirect, not a season of matches"
         )
 
@@ -79,7 +79,7 @@ def describe(path, config, quiet=False):
     missing_bet = [c for c in bet_odds if c not in frame.columns]
     if missing_bet:
         failures.append(
-            f"missing the odds bet into {missing_bet} — without a price there "
+            f"missing the odds bet into {missing_bet}; without a price there "
             "is no edge to measure and no bet to place"
         )
 
@@ -88,7 +88,7 @@ def describe(path, config, quiet=False):
     missing_close = [c for c in close_odds if c not in frame.columns]
     if missing_close:
         failures.append(
-            f"missing closing odds {missing_close} — CLV is this project's "
+            f"missing closing odds {missing_close}: CLV is this project's "
             "headline claim and cannot be computed without them. A mirror "
             "that drops these columns is not a substitute for the real file"
         )
@@ -109,7 +109,7 @@ def describe(path, config, quiet=False):
         facts["mean_goals"] = round(float(goals.sum(axis=1).mean()), 2)
         if not (1.5 <= facts["mean_goals"] <= 4.5):
             warnings.append(
-                f"mean total goals is {facts['mean_goals']} — a top league "
+                f"mean total goals is {facts['mean_goals']}; a top league "
                 "sits near 2.7. Check the columns are what they claim"
             )
 
@@ -117,7 +117,7 @@ def describe(path, config, quiet=False):
         facts["home_win_rate"] = round(float(home_rate), 3)
         if not (0.30 <= home_rate <= 0.55):
             warnings.append(
-                f"home win rate is {home_rate:.1%} — expect roughly 43-46%"
+                f"home win rate is {home_rate:.1%}; expect roughly 43-46%"
             )
 
         try:
@@ -133,7 +133,7 @@ def describe(path, config, quiet=False):
 
     # --- 7. Are the odds a real book? ------------------------------------
     # The strongest integrity check available. A real bookmaker's three prices
-    # imply probabilities summing to a little OVER 1 — the overround, typically
+    # imply probabilities summing to a little OVER 1, the overround, typically
     # 2-8%. Fabricated or mangled odds rarely get this right.
     for label, columns in (("bet-into", bet_odds), ("closing", close_odds)):
         if columns and all(c in frame.columns for c in columns):
@@ -181,7 +181,7 @@ def describe(path, config, quiet=False):
             if identical > 0.5:
                 failures.append(
                     f"{identical:.0%} of rows have closing odds identical to "
-                    "the opening odds — the closing column is a copy, so CLV "
+                    "the opening odds: the closing column is a copy, so CLV "
                     "would be measured against itself and always read zero"
                 )
 
@@ -237,7 +237,7 @@ def main():
         print("Usable, but read the warnings before trusting the numbers.")
     else:
         print("At least one file cannot drive this pipeline. Do not run the")
-        print("backtest on it — a result from the wrong data is worse than no")
+        print("backtest on it: a result from the wrong data is worse than no")
         print("result, because it looks exactly like a real one.")
     print()
     return worst

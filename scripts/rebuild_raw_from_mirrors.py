@@ -4,7 +4,7 @@ Rebuild football-data.co.uk season files from two GitHub mirrors.
 
 Why this exists
 ---------------
-football-data.co.uk is unreachable from the author's network (gambling-category
+football-data.co.uk is unreachable from my network (gambling-category
 filtering). GitHub is reachable. No single GitHub mirror has everything V8
 needs, but two of them together do:
 
@@ -32,7 +32,7 @@ The joins are checked, not trusted
 Two independent copies of the same results are a free audit. For every match
 the two mirrors must agree on the goals. Any disagreement, any match present in
 one mirror but not the other, or any missing price stops the script before a
-file is written - the same "refuse, don't warn" rule as make_charts.py.
+file is written: the same "refuse, don't warn" rule as make_charts.py.
 
 Usage
 -----

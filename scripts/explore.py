@@ -82,7 +82,7 @@ def main():
 
     config = load_config(args.config)
     fingerprint = logging_setup.run_fingerprint(config)
-    print(f"\nV8 — exploration\n  fingerprint: {fingerprint}\n")
+    print(f"\nV8 exploration\n  fingerprint: {fingerprint}\n")
 
     table, real = exploration.load_canonical(config)
     if not real and is_published(args.out):

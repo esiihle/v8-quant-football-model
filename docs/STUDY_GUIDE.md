@@ -1,29 +1,27 @@
-# V8 — Study Guide
+# V8 Study Guide
 
-*How the pipeline works, why each choice was made, what went wrong, and how to
-say it to a panel. Written 6 Nov 2026.*
-
-This guide is for one reader: the person who has to explain this project in an
-interview without notes. It follows the pipeline stage by stage. Each stage has
-the same six parts:
+I wrote this guide to explain V8 without notes: how the pipeline works, why I
+made each choice, what went wrong along the way, and how I would answer the
+questions a panel is likely to ask. It follows the pipeline stage by stage,
+and each stage has the same six parts:
 
 1. **What it does**, in two sentences.
 2. **The code**, quoted from the repository. Every block is an exact excerpt,
    and `tests/test_docs.py` fails if the source changes and this guide does not.
 3. **The maths**, derived rather than asserted.
-4. **Trade-off box**: what was chosen, what else could have been, and why.
-5. **The bug story**: what broke at this stage and how it was caught.
-6. **Interview drill**: the questions a panel is likely to ask, with answers
-   short enough to say out loud.
+4. **Trade-off**: what I chose, what else I could have done, and why.
+5. **The bug**: what broke at this stage and how I caught it.
+6. **Interview drill**: likely questions, with answers short enough to say out
+   loud.
 
 Every figure is from `docs/charts/numbers.json` (2 seasons, fingerprint
 `eddedac58a664dd8`) or `docs/charts/epl_2012_2025/numbers.json` (13 seasons,
 `9ed0f574b163c749`), and the same tests check it.
 
 ```
-ingest → features → Dixon-Coles → calibration → staking → walk-forward → CLV → benchmark
-                                                                ↑
-                         simulation study: does the machinery work at all?
+ingest -> features -> Dixon-Coles -> calibration -> staking -> walk-forward -> CLV -> benchmark
+
+simulation study: can the machinery find an edge at all?
 ```
 
 ---
@@ -59,7 +57,7 @@ bugs, several of which made the results look better than they were."
 
 **What it does.** Reads football-data.co.uk season files into one canonical
 table: dates parsed, duplicates dropped, results checked against goals, odds
-outside a plausible range voided. Because that site is blocked on the author's
+outside a plausible range voided. Because that site is blocked on my
 network, `scripts/rebuild_raw_from_mirrors.py` rebuilds the files from two
 GitHub mirrors of it.
 
@@ -87,7 +85,7 @@ closing odds identical to opening.
 > changes everything downstream; rebuilding the original changes nothing, and
 > the audit means the mirrors are checked, not trusted.
 
-> **Bug story: the numbers that were never real.** The README once reported
+> **Bug: the numbers that were never real.** The README once reported
 > ROI −28.5% on 413 bets. Those figures came from an earlier session and had
 > never been reproduced. A companion project had just been caught publishing
 > synthetic results as real, so the README carried an "Awaiting regeneration"
@@ -182,7 +180,7 @@ The blend is 50/50.
 > roughly one season of real influence. It is a stated assumption, not a
 > tuned optimum, and it is in `config.yaml` where a reviewer can see it.
 
-> **Bug story #1: lookahead in the xG proxy.** The conversion rate (goals per
+> **Bug #1: lookahead in the xG proxy.** The conversion rate (goals per
 > shot on target) was first measured over the whole file. So an August match
 > was scored using a rate computed partly from May. The lookahead test caught
 > it. The fix was structural: `blend_goals(matches, history, config)` takes
@@ -259,7 +257,7 @@ $\rho = -0.0065$, close to zero.
         return INVALID_PENALTY * (1.0 + violation)
 ```
 
-> **Bug story #2: the optimiser that died while reporting success.** A
+> **Bug #2: the optimiser that died while reporting success.** A
 > parameter set giving a negative τ used to return `+inf`. L-BFGS-B estimates
 > its gradient by finite differences, so one infinite probe gives `inf − inf =
 > nan`. The gradient became useless and the optimiser stopped moving, **while
@@ -269,7 +267,7 @@ $\rho = -0.0065$, close to zero.
 > region. (The function's docstring kept describing `+inf` until 6 Nov, when
 > writing this guide caught it.)
 
-> **Bug story #3: ρ pinned at its bound.** The box for $\rho$ was computed from
+> **Bug #3: ρ pinned at its bound.** The box for $\rho$ was computed from
 > the largest $\lambda$ the parameter box allowed, $e^{4} \approx 54.6$ goals a
 > match. That squeezed the box to [−0.018, 0.0003], so $\rho$ sat on its lower
 > bound while every start agreed. It was caught because **the bias did not
@@ -303,7 +301,7 @@ $\rho = -0.0065$, close to zero.
 
 ---
 
-## 4. Calibration: are the probabilities honest?
+## 4. Calibration: does 70% mean 70%?
 
 **What it does.** Checks whether events the model calls 30% happen about 30%
 of the time, and fits a correction map if not. The map is fitted on the
@@ -387,7 +385,7 @@ returns $o$ with probability $p$, so expected profit is $p\,o - 1$. That is
 positive exactly when $p > 1/o$, the raw implied probability. The de-vigged
 probability is what the market *thinks*; the raw one is what you're *paid at*.
 
-> **Bug story #4: value tested against the wrong price.** Edge was first
+> **Bug #4: value tested against the wrong price.** Edge was first
 > computed against the de-vigged probability. But payouts happen at the actual
 > odds, which include the margin, so bets were placed that had negative
 > expected value. Now `edge` against the raw price decides bets, and
@@ -438,7 +436,7 @@ optimum.
 
 ---
 
-## 6. Walk-forward: the honest test
+## 6. Walk-forward: testing only on unseen data
 
 **What it does.** Steps through time. Every 14 days it refits the model and the
 calibration map on matches **strictly before** the window, prices the window,
@@ -522,13 +520,13 @@ the negative CLV is the margin. On 13 seasons the movement is +0.02%
 [−0.05%, +0.09%], pinned near zero. The market moved neither toward nor away
 from the model's picks: that's what a model with no information looks like.
 
-> **Bug story #5: the CLV verdict that was inverted.** The odds ratio is
+> **Bug #5: the CLV verdict that was inverted.** The odds ratio is
 > asymmetric: a halved price scores −50%, a doubled one +100%. Its mean was once
 > carried positive by a single +108% outlier while most bets lost to the close.
 > Probability points is now authoritative, and disagreement between measures is
 > flagged, never resolved in the flattering direction.
 
-> **Bug story #11: negative CLV blamed on the market.** The report said the
+> **Bug #11: negative CLV blamed on the market.** The report said the
 > market "moves AWAY from" the model's prices. Decomposed, the movement was
 > zero: it was all margin. The verdict is now chosen from the movement. A
 > follow-on: if the market moves toward a bet by *less* than the margin, the
@@ -598,7 +596,7 @@ a *stake-weighted* average of per-bet returns. The plain mean of
 $\text{profit}_i / \text{stake}_i$ weights a 10-unit bet and a 1-unit bet
 equally. Resampling whole bets keeps each bet's profit and stake together.
 
-> **Bug story #10: two yields under one name.** On the same 433 bets the
+> **Bug #10: two yields under one name.** On the same 433 bets the
 > backtest printed −15.84% (profit ÷ turnover) and the headline printed
 > −10.08% (the plain mean). The confidence interval was attached to the wrong
 > one and *included* zero. On the right number it excludes zero: **the
@@ -635,7 +633,7 @@ means "no edge of detectable size", not "no edge".
 
 **The calibration.** How much of the opening price's error the closing price
 corrects was **measured, not chosen**: the statistic is the market movement on
-the longest 25% of opening prices, with no model involved. Real EPL 2012–25
+the longest 25% of opening prices, with no model involved. Real EPL 2012-25
 gives +0.12%; the simulator matches it when the close corrects 40% of the
 opening error.
 
@@ -644,7 +642,7 @@ opening error.
                 open_error = rng.normal(0, OPENING_NOISE, 3)
 ```
 
-> **Bug story: the control that passed for the wrong reason.** Decomposing the
+> **Bug: the control that passed for the wrong reason.** Decomposing the
 > simulated CLV showed a model betting *random numbers* getting the market
 > moving toward its bets, +0.46 points. It passed only because the margin hid
 > it. Two causes: the simulator loaded margin proportionally while the pipeline
@@ -687,7 +685,7 @@ designated machine, and the docs tests compare within a stated tolerance.
 | `verify_raw_data.py` copy check | CLV measured against itself |
 | Cross-mirror score audit | A wrong join between two sources |
 
-> **Bug story #8: the stamp that was walked past.** Sample charts were once
+> **Bug #8: the stamp that was walked past.** Sample charts were once
 > committed as results. The ILLUSTRATIVE stamp fired correctly and was ignored.
 > The stamp is now a **refusal**: `make_charts.py` won't write into
 > `docs/charts/` from sample data. *A control that prevents beats a control that

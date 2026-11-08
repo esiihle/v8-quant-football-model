@@ -1,5 +1,5 @@
 """
-Phase 3 tests — the Dixon-Coles model.
+Phase 3 tests: the Dixon-Coles model.
 
 Three kinds of test here, in increasing order of what they prove:
 
@@ -170,7 +170,7 @@ def test_every_market_sums_to_one():
 
 
 def test_stronger_home_team_is_more_likely_to_win():
-    """A basic directional sanity check — the kind a reviewer asks for first."""
+    """A basic directional sanity check, the kind a reviewer asks for first."""
     strong = dc.market_probabilities(dc.score_matrix(2.2, 0.8, -0.1))
     even = dc.market_probabilities(dc.score_matrix(1.4, 1.4, -0.1))
 
@@ -188,12 +188,12 @@ def test_rho_bounds_keep_probabilities_valid():
 
     # Well outside the valid range, a cell would go negative. The matrix clips
     # and renormalises rather than returning nonsense, but the clipping is itself
-    # the signal that rho is invalid — so the optimiser is bounded to avoid it.
+    # the signal that rho is invalid, so the optimiser is bounded to avoid it.
     assert low > -np.inf and high < np.inf
 
 
 # =========================================================================
-# 2. Parameter recovery — the real test of the estimator
+# 2. Parameter recovery: the real test of the estimator
 # =========================================================================
 
 def test_fit_recovers_known_parameters(config):
@@ -253,7 +253,7 @@ def test_multiple_starts_agree(config):
     """Convergence means several independent starts find the same optimum.
 
     If they scatter, the likelihood surface is awkward and the fit should not be
-    trusted — which is why the report warns rather than staying silent.
+    trusted, which is why the report warns rather than staying silent.
     """
     matches, _ = simulate_league(n_rounds=30, seed=8)
     cfg = dict(config)
@@ -281,7 +281,7 @@ def test_penalty_shrinks_strengths_toward_average(config):
 
 
 # =========================================================================
-# 3. Discipline — no lookahead
+# 3. Discipline: no lookahead
 # =========================================================================
 
 def test_fit_uses_only_matches_before_as_of(config):
@@ -369,7 +369,7 @@ def test_rho_is_not_pinned_at_its_bound(config):
     """The second bug of 10 Oct 2026.
 
     The rho box was sized from the largest lambda the strength box could
-    theoretically produce — about 55 goals a match — which squeezed the box to
+    theoretically produce, about 55 goals a match, which squeezed the box to
     [-0.018, 0.0003]. rho sat on the lower edge, the fit reported success, and
     the starts agreed with each other. Nothing looked wrong.
 
@@ -386,7 +386,7 @@ def test_rho_is_not_pinned_at_its_bound(config):
 
     assert diagnostics["rho_at_bound"] is False, (
         f"rho {model['rho']:.4f} is stuck on the edge of {diagnostics['rho_box']} "
-        "— the bound is driving the estimate, not the data"
+        ": the bound is driving the estimate, not the data"
     )
     low, high = diagnostics["rho_box"]
     assert low <= truth["rho"] <= high, (
@@ -462,7 +462,7 @@ def test_invalid_region_penalty_has_a_usable_gradient(config):
     assert severe > mild, "the penalty must increase with the size of the violation"
 
 
-# --- Added 27 Oct 2026: the minimum-weight cutoff ---------------------------
+# --- The minimum-weight cutoff ---------------------------
 
 def league_with_an_ancient_season(config):
     """A recent league plus a block played four years earlier that includes a

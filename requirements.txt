@@ -1,4 +1,4 @@
-# V8 — pinned dependencies (Phase 0)
+# V8: pinned dependencies (Phase 0)
 # Install with:  pip install -r requirements.txt
 numpy==2.1.3
 pandas==2.2.3

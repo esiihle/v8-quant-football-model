@@ -2,7 +2,7 @@
 #
 # What this proves, and why it belongs in a portfolio repo
 # -------------------------------------------------------
-# Every push runs the whole test suite on a FRESH machine with nothing cached —
+# Every push runs the whole test suite on a FRESH machine with nothing cached,
 # no local data, no leftover virtual environment, no "it works on mine". That is
 # the only way to know a clean clone works, and it is the single most common
 # thing wrong with a project that looks finished.
@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
-      # Don't cancel the 3.12 job because 3.11 failed — seeing both results is
+      # Don't cancel the 3.12 job because 3.11 failed; seeing both results is
       # the point of testing two versions.
       fail-fast: false
       matrix:
@@ -57,6 +57,6 @@ jobs:
 
       - name: Check the pipeline runs on the bundled sample
         # No real data is available here, so this exercises the sample fallback
-        # path end to end — which is exactly what a recruiter cloning the repo
+        # path end to end, which is exactly what a recruiter cloning the repo
         # will hit first.
         run: python scripts/run_pipeline.py --sample --no-save

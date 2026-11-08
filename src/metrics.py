@@ -4,8 +4,8 @@ Metrics.  [Proper scoring rules built in Phase 4, 13 Oct 2026.
 
 Two families of number live here, and they answer different questions:
 
-* **Proper scoring rules** (this phase) — is the probability any good?
-* **Betting performance** (Phase 6) — did acting on it make money?
+* **Proper scoring rules** (this phase): is the probability any good?
+* **Betting performance** (Phase 6): did acting on it make money?
 
 A scoring rule is called *proper* when the only way to minimise it is to report
 your true beliefs. That matters more than it sounds: an improper rule can be
@@ -65,7 +65,7 @@ def log_loss(probabilities, outcomes):
 
 
 # The probability columns a model produces are not named after the labels the
-# data records — the model says "home_win" while the results file says "H". Every
+# data records: the model says "home_win" while the results file says "H". Every
 # multi-outcome metric therefore takes an explicit mapping, so the pairing is
 # stated once by the caller instead of being assumed inside each function. The
 # first version of this module conflated the two and silently scored the wrong
@@ -83,7 +83,7 @@ def multiclass_brier(probability_frame, outcome_labels, column_to_label):
 
     .. math:: \\frac{1}{N}\\sum_i \\sum_k (p_{ik} - o_{ik})^2
 
-    Summing over all outcomes rather than scoring one in isolation is the honest
+    Summing over all outcomes rather than scoring one in isolation is the fairer
     version: a model can look excellent on home wins alone while being hopeless
     at telling draws from away wins.
 
@@ -134,7 +134,7 @@ def baseline_scores(outcome_labels, column_to_label):
 
     Every reported number should be read against this. Beating it is the minimum
     bar for claiming the model knows anything at all, and it is surprisingly easy
-    to fail — which is exactly why it gets printed.
+    to fail, which is exactly why it gets printed.
     """
     labels = np.asarray(outcome_labels)
     rates = {column: float(np.mean(labels == label))
@@ -192,7 +192,7 @@ def bootstrap_ratio_ci(numerator, denominator, n_resamples=2000,
                        confidence=0.95, seed=42):
     """Percentile bootstrap interval for a RATIO of sums: sum(num) / sum(den).
 
-    Why a separate function [added 25 Oct 2026]
+    Why a separate function
     -------------------------------------------
     Yield is profit / turnover = sum(profit) / sum(stake). That is a
     stake-WEIGHTED average of each bet's return, and it is NOT the same number
@@ -205,11 +205,11 @@ def bootstrap_ratio_ci(numerator, denominator, n_resamples=2000,
 
     The bankroll experienced -72.7%. Kelly stakes more where the model claims
     more edge, so on a real ledger the two differ whenever the big-edge bets
-    behave differently from the small ones - on the 2023-25 EPL run by almost
+    behave differently from the small ones; on the 2023-25 EPL run, by almost
     six points (-15.84% vs -10.08%).
 
-    To bootstrap a ratio of sums, resample whole BETS - the profit and the stake
-    of a bet travel together - and recompute the ratio on each resample.
+    To bootstrap a ratio of sums, resample whole BETS (the profit and the stake
+    of a bet travel together) and recompute the ratio on each resample.
     Resampling the two columns independently would break the pairing and give
     an interval for a quantity nobody bet.
     """
@@ -257,9 +257,9 @@ def sharpe_like(returns, periods_per_year=52):
 
     Called *Sharpe-like* on purpose, and the caveats matter more than the number:
 
-    * no risk-free rate is subtracted — betting returns are not an excess over
+    * no risk-free rate is subtracted, betting returns are not an excess over
       cash in a meaningful sense;
-    * Sharpe assumes roughly normal returns, and bet returns are anything but —
+    * Sharpe assumes roughly normal returns, and bet returns are anything but,
       so this understates tail risk, which is the risk that actually ends
       bankrolls.
 
@@ -395,7 +395,7 @@ def metrics_report(summary, band_table=None):
                      f"{summary['sharpe_like']:>10.2f}")
         lines.append("    (no risk-free rate, and it assumes near-normal returns "
                      "which bet returns")
-        lines.append("     are not — read it beside the drawdown, which makes no "
+        lines.append("     are not; read it beside the drawdown, which makes no "
                      "such assumption)")
 
     lines.append("")
@@ -404,7 +404,7 @@ def metrics_report(summary, band_table=None):
     else:
         lines.append("  Yield interval INCLUDES ZERO: this is not statistically")
         lines.append("  distinguishable from no edge. CLV is the better-powered")
-        lines.append("  test on this many bets — see the CLV report.")
+        lines.append("  test on this many bets. See the CLV report.")
 
     if band_table is not None and not band_table.empty:
         lines.append("")

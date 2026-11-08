@@ -1,5 +1,5 @@
 """
-Phase 7 tests — hardening.
+Phase 7 tests: hardening.
 
 These check the things that make a result trustworthy rather than the results
 themselves: dependencies pinned to exact versions, a run fingerprint that
@@ -30,7 +30,7 @@ def test_every_dependency_is_pinned_to_an_exact_version():
     """`>=` is fine while building and wrong once results are being quoted.
 
     A loose pin means a reader who clones this repo next year installs a
-    different pandas and may get different numbers — which makes every figure in
+    different pandas and may get different numbers, which makes every figure in
     the README unverifiable.
     """
     requirements = (REPO_ROOT / "requirements.txt").read_text().splitlines()
@@ -47,8 +47,8 @@ def test_every_dependency_is_pinned_to_an_exact_version():
 
 
 def test_requirements_cover_everything_the_code_imports():
-    r"""A dependency used but not declared works on the author's machine and
-    fails on a clean clone — the classic way a finished project is not.
+    r"""A dependency used but not declared works on the machine it was written on and
+    fails on a clean clone: the classic way a finished project is not.
 
     Imports are found by parsing each module with `ast`, not by regex. The first
     version of this test matched `^\s*(from|import)\s+(\w+)` against raw lines
@@ -129,7 +129,7 @@ def test_changing_the_seed_changes_the_fingerprint():
 
 def test_cosmetic_changes_do_not_change_the_fingerprint():
     """Log level and key order are not results, so they must not invalidate a
-    fingerprint — otherwise nobody would trust it."""
+    fingerprint: otherwise nobody would trust it."""
     config = load_config()
     original = logging_setup.run_fingerprint(config)
 
@@ -253,7 +253,7 @@ def test_ci_tests_more_than_one_python_version():
     assert len(versions) >= 2, f"only tests Python {versions}"
 
 
-# --- Added 27 Oct 2026: configs that extend other configs -------------------
+# --- Configs that extend other configs -------------------
 
 def test_an_overlay_merges_dicts_and_replaces_lists(tmp_path):
     """Dicts merge key by key; a list in the overlay replaces the base's list

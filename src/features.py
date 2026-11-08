@@ -1,5 +1,5 @@
 """
-Stage 2 — Feature engineering.  [Built in Phase 2, 9 Oct 2026]
+Stage 2: Feature engineering. 
 
 Turns the canonical match table into one row of *predictive inputs* per match:
 each team's attack and defence strength, shrunk toward the league average,
@@ -18,17 +18,17 @@ rating a team in October will look brilliant and lose money. The test
 
 What gets built, and why
 ------------------------
-* **Attack / defence strength** — how many goals a team scores and concedes
+* **Attack / defence strength**: how many goals a team scores and concedes
   relative to the league average. 1.0 is exactly average; 1.3 attack means they
   score 30% more than a typical team.
-* **Bayesian shrinkage** — a team with three matches played has a meaningless
+* **Bayesian shrinkage**: a team with three matches played has a meaningless
   average, so each estimate is pulled toward the league mean by weight
   ``n / (n + k)``. This is the same machinery as a thin-file or
   low-default-portfolio adjustment in credit risk, which is why it is worth
   being able to explain in both languages.
-* **Time decay** — a match from two seasons ago tells you less about this squad
+* **Time decay**: a match from two seasons ago tells you less about this squad
   than one from last month, so matches are weighted ``0.5 ** (age / half_life)``.
-* **xG proxy** — goals are the truth but are rare and noisy. Shots on target are
+* **xG proxy**: goals are the truth but are rare and noisy. Shots on target are
   plentiful. The feature blends them, controlled by ``features.xg_weight``.
 
 See docs/methodology.md section 2.
@@ -59,7 +59,7 @@ class FeatureError(Exception):
 def time_weights(dates, as_of, half_life_days=180, min_weight=0.0):
     """Weight each past match by how recent it is.
 
-    ``weight = 0.5 ** (age_in_days / half_life)`` — a match exactly one
+    ``weight = 0.5 ** (age_in_days / half_life)``: a match exactly one
     half-life old counts half as much as one played today.
 
     Matches dated on or after ``as_of`` get weight 0. That is the lookahead
@@ -110,7 +110,7 @@ def shrink(estimate, n_matches, prior, k=8):
         shrunk = w * estimate + (1 - w) * prior,   w = n / (n + k)
 
     With k = 8: a team with 0 matches is given the prior exactly; with 8 matches
-    it sits halfway; with 38 it is 83% its own record. There is no cliff — the
+    it sits halfway; with 38 it is 83% its own record. There is no cliff: the
     estimate earns trust gradually as evidence accumulates.
 
     Parameters
@@ -118,7 +118,7 @@ def shrink(estimate, n_matches, prior, k=8):
     estimate : float or array
         The team's own (noisy) figure.
     n_matches : float or array
-        How many matches back it. May be fractional — with time decay, the
+        How many matches back it. May be fractional; with time decay, the
         *effective* sample size is the sum of weights, not a count of rows.
     prior : float
         What to fall back on, i.e. the league average.
@@ -141,7 +141,7 @@ def shrink(estimate, n_matches, prior, k=8):
 def conversion_rates(history):
     """Goals per shot on target, measured from past matches only.
 
-    Home and away are measured separately because they genuinely differ — home
+    Home and away are measured separately because they genuinely differ: home
     sides convert slightly better, and folding that into the xG proxy would
     smuggle home advantage into team strength, where it would be counted twice.
 
@@ -229,7 +229,7 @@ def team_strengths(history, as_of, config=None):
     conceded (lower defence is better).
 
     Each team's figure is a time-weighted average, then shrunk toward 1.0 by its
-    effective sample size — so a team three matches into a season barely moves
+    effective sample size, so a team three matches into a season barely moves
     from average, however spectacular those three matches were.
 
     Parameters
@@ -261,7 +261,7 @@ def team_strengths(history, as_of, config=None):
         )
 
     # The league baseline: weighted mean goals in a team-match. Home and away
-    # are pooled here on purpose — home advantage is a separate effect, fitted
+    # are pooled here on purpose, home advantage is a separate effect, fitted
     # in Phase 3, and folding it into team strength would double-count it.
     total_weight = past["w"].sum()
     league_mean = (
@@ -349,7 +349,7 @@ def build_features(matches, config=None):
     for as_of, todays_matches in work.groupby("MatchDate", sort=True):
         # Everything below this line sees history only. Both the xG conversion
         # rate AND the team strengths are measured from matches played strictly
-        # before today — which is exactly what a bettor had at kick-off.
+        # before today, which is exactly what a bettor had at kick-off.
         history = work[work["MatchDate"] < as_of]
         blended_history, xg_note = blend_goals(history, history, config)
         strengths = team_strengths(blended_history, as_of, config)

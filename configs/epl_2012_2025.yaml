@@ -1,8 +1,8 @@
 # =============================================================================
-# V8 — the long run: EPL 2012/13 to 2024/25 (13 seasons, 4,940 matches)
+# V8 long run: EPL 2012/13 to 2024/25 (13 seasons, 4,940 matches)
 # =============================================================================
 # Everything not stated here comes from ../config.yaml. That is deliberate: this
-# run must differ from the headline in ONE way - how much history it sees - so
+# run must differ from the headline in ONE way, how much history it sees, so
 # any difference in results is attributable to that and nothing else.
 #
 # 13 seasons is every EPL season whose football-data file carries Pinnacle

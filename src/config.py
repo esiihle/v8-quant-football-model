@@ -58,7 +58,7 @@ def _deep_merge(base, override):
 
 
 def _load_with_extends(config_path, seen):
-    """Load one YAML file, resolving an optional `extends:` key. [27 Oct 2026]
+    """Load one YAML file, resolving an optional `extends:` key.
 
     A config may begin with ``extends: <path>``, resolved relative to the file
     that says it. The base is loaded first and this file's keys are merged over

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Phase 8 — generate every chart the README reports, from one real pipeline run.
+Phase 8: generate every chart the README reports, from one real pipeline run.
 
 Why this is a script and not a notebook: the README makes numerical claims, and a
 claim is only as good as the command that reproduces it. Running
@@ -18,7 +18,7 @@ Charts built from the 12-match bundled sample are meaningless, and a meaningless
 chart that looks real is worse than no chart. So when real data is absent, every
 chart is stamped ILLUSTRATIVE across its face and numbers.json records
 `"real_data": false`. The stamp is deliberately hard to miss, because the mistake
-it prevents — committing sample charts as results — is easy to make.
+it prevents, committing sample charts as results, is easy to make.
 
 Usage
 -----
@@ -66,7 +66,7 @@ CHART_PURPOSE = {
                         "with the bootstrap interval on the mean",
     "reliability": "out-of-sample predicted vs realised probability",
     "bankroll": "the walk-forward bankroll curve with drawdown from peak",
-    "honesty": "in-sample vs walk-forward ROI and yield — what the test boundary costs",
+    "honesty": "in-sample vs walk-forward ROI and yield, what the test boundary costs",
     "clv_by_edge": "does the model's own claimed edge predict CLV?",
 }
 
@@ -137,7 +137,7 @@ def finish(fig, ax_or_axes, path, illustrative, title=None, subtitle=None):
                                     fontweight="normal", pad=8)
     if illustrative:
         for ax in np.ravel(axes):
-            ax.text(0.5, 0.5, "ILLUSTRATIVE\nbundled sample — not results",
+            ax.text(0.5, 0.5, "ILLUSTRATIVE\nbundled sample: not results",
                     transform=ax.transAxes, ha="center", va="center",
                     fontsize=15, fontweight="bold", color=BAD, alpha=0.30,
                     rotation=18, zorder=50)
@@ -166,9 +166,9 @@ def pct(value, places=1):
 def tick_pct(value, _position=None):
     """Axis tick label: a percentage with exactly as many decimals as it needs.
 
-    Added 27 Oct 2026. Axis formatters used a fixed number of decimals, so on
+    Axis formatters used a fixed number of decimals, so on
     the 13-season CLV chart ticks at -0.25% and -0.75% were printed "-0.3%"
-    and "-0.8%" - labels that disagreed with the gridlines they sat on. A tick
+    and "-0.8%", labels that disagreed with the gridlines they sat on. A tick
     label is a measurement; it may not be rounded into a different number.
     """
     for places in range(0, 4):
@@ -180,7 +180,7 @@ def tick_pct(value, _position=None):
 # A bankroll that falls below this share of its start is drawn on a log axis.
 # On a linear axis the 13-season ruin curve sat flat on zero for eight years
 # while still falling from about 50 to 0.2: a log axis shows that the losses
-# were proportional and steady, which is the honest picture of Kelly ruin.
+# were proportional and steady, which is what Kelly ruin actually looks like.
 LOG_SCALE_BELOW = 0.05
 
 
@@ -196,8 +196,8 @@ def use_log_scale(values, start):
 def chart_clv_distribution(data, illustrative, out_dir):
     """Per-bet CLV in probability points.
 
-    Probability points, not the odds ratio, because the ratio is asymmetric — a
-    halved price scores -50%, a doubled one +100% — so its mean is carried by
+    Probability points, not the odds ratio, because the ratio is asymmetric: a
+    halved price scores -50%, a doubled one +100%, so its mean is carried by
     outliers. That bug is documented in methodology §6; this chart shows the
     measure that replaced it.
     """
@@ -265,7 +265,7 @@ def chart_clv_distribution(data, illustrative, out_dir):
 # --- Chart 2: reliability diagram ------------------------------------------
 
 def chart_reliability(data, illustrative, out_dir):
-    """Predicted vs realised, out of sample. The 45° line is honesty."""
+    """Predicted vs realised, out of sample. The 45° line is perfect calibration."""
     table = data["reliability"]
 
     fig, ax = new_figure((5.6, 5.4))
@@ -311,7 +311,7 @@ def chart_bankroll(data, illustrative, out_dir):
     """The walk-forward bankroll, with drawdown from peak shaded.
 
     One axis, on purpose. Bankroll and drawdown are different scales, and a
-    second y-axis would let the eye read a relationship that is not there — so
+    second y-axis would let the eye read a relationship that is not there, so
     the drawdown is drawn as the gap between the curve and its own peak.
     """
     ledger = data["walk_ledger"]
@@ -386,7 +386,7 @@ def chart_honesty(data, illustrative, out_dir):
     TWO PANELS, NOT TWO SERIES ON ONE AXIS. ROI is measured on the bankroll and
     yield on money staked; they routinely differ by an order of magnitude, so a
     shared axis flattens yield into an invisible sliver. Two measures of
-    different scale get two scales — never two y-axes on one chart, which lets
+    different scale get two scales, never two y-axes on one chart, which lets
     the eye read a relationship that is not there.
     """
     numbers = data["numbers"]
@@ -417,7 +417,7 @@ def chart_honesty(data, illustrative, out_dir):
         ax.set_xticks([0, 1])
         ax.set_xticklabels(["in-sample", "walk-forward"], fontsize=9)
         ax.set_xlim(-0.6, 1.6)
-        ax.set_title(f"{name} — {explanation}", fontsize=10, color=INK_SOFT,
+        ax.set_title(f"{name}: {explanation}", fontsize=10, color=INK_SOFT,
                      pad=8)
         ax.yaxis.set_major_formatter(tick_pct)
         ax.grid(axis="y", alpha=0.6)
@@ -433,8 +433,8 @@ def chart_honesty(data, illustrative, out_dir):
     handles = [plt.Rectangle((0, 0), 1, 1, color=ORANGE),
                plt.Rectangle((0, 0), 1, 1, color=BLUE)]
     fig.legend(handles,
-               ["in-sample — the model saw the matches it bet on",
-                "walk-forward — the forecast"],
+               ["in-sample: the model saw the matches it bet on",
+                "walk-forward: the forecast"],
                loc="outside lower center", ncol=1, frameon=False, fontsize=9)
 
     finish(fig, axes, out_dir / CHARTS["honesty"], illustrative,
@@ -456,7 +456,7 @@ def chart_clv_by_edge(data, illustrative, out_dir):
         finish(fig, ax, out_dir / CHARTS["clv_by_edge"], illustrative)
         return
 
-    # Probability points where available — the authoritative measure, and the
+    # Probability points where available: the authoritative measure, and the
     # same units as the lead chart so the two can be read together.
     column = ("mean_clv_points" if "mean_clv_points" in table.columns
               else "mean_clv_ratio")
@@ -529,7 +529,7 @@ def refuse_illustrative_output(out_dir, allow_sample):
     """Stop sample-built charts from ever landing in the published folder.
 
     The ILLUSTRATIVE stamp was a warning, and a warning is something a person
-    can commit anyway — on 21 Oct 2026 exactly that happened on the companion
+    can commit anyway: on 21 Oct 2026 exactly that happened on the companion
     football project: stamped charts from a 12-match sample were committed and
     shown on the repository's front page, with two charts missing entirely.
 
@@ -545,7 +545,7 @@ def refuse_illustrative_output(out_dir, allow_sample):
         targets_published = False
 
     if targets_published and not allow_sample:
-        print("\n  REFUSED — these charts would be built from the bundled sample,")
+        print("\n  REFUSED: these charts would be built from the bundled sample,")
         print("  and docs/charts/ is what the README publishes.")
         print()
         print("  Either:")
@@ -570,7 +570,7 @@ def gather(config, use_sample, verbose=False):
         raw = ingest.load_matches(REPO_ROOT / config["data"]["sample_path"], config)
         illustrative = True
         if not use_sample:
-            print("    NO RAW DATA FOUND — falling back to the bundled sample.")
+            print("    NO RAW DATA FOUND, falling back to the bundled sample.")
             for entry in ingest.expected_raw_files(config):
                 print(f"      download {entry['url']}")
                 print(f"           to {entry['path']}")
@@ -614,7 +614,7 @@ def gather(config, use_sample, verbose=False):
         numbers["ece"] = float(calibrate.expected_calibration_error(
             evaluated["home_win"].to_numpy(), realised, n_bins=10))
         # The ECE a perfectly calibrated model would score on these same
-        # probabilities and this many matches [added 29 Oct 2026]. Without it
+        # probabilities and this many matches. Without it
         # a 0.06 on ~340 matches cannot be read: that is roughly what pure
         # noise scores. See exploration.ece_noise_floor.
         floor = exploration.ece_noise_floor(evaluated["home_win"].to_numpy(), 10)
@@ -637,14 +637,14 @@ def gather(config, use_sample, verbose=False):
         print(f"    cannot calibrate or stake in sample: {error}")
         numbers["ece"] = None
 
-    # --- walk-forward, which is the honest number ---
+    # --- walk-forward, the out-of-sample number ---
     walk_ledger, clv_summary, clv_bands = None, None, None
     try:
         print("  walk-forward backtest (the slow part)")
         walk = backtest.walk_forward(matches, config, progress=verbose)
         bet_history = walk["bets"]
 
-        # Model vs market on every priced match [added 5 Nov 2026]. Recorded
+        # Model vs market on every priced match. Recorded
         # whether or not any bets were placed: a model that never bets can
         # still be compared with the market.
         if len(walk.get("priced", [])):
@@ -670,8 +670,8 @@ def gather(config, use_sample, verbose=False):
             numbers["starting_bankroll"] = walk_summary["starting_bankroll"]
             numbers["windows"] = int(len(walk["windows"]))
 
-            # The yield's bootstrap interval [added 25 Oct 2026]. Taken from
-            # metrics.summarise, whose yield is now profit / turnover - the
+            # The yield's bootstrap interval. Taken from
+            # metrics.summarise, whose yield is now profit / turnover, the
             # same definition as walk_forward_yield above, so the estimate and
             # its interval describe one number.
             headline = metrics.summarise(walk_ledger, walk_summary, config)
@@ -691,7 +691,7 @@ def gather(config, use_sample, verbose=False):
             numbers["clv_headline"] = clv_summary["headline_measure"]
             numbers["clv_measures_disagree"] = bool(clv_summary["measures_disagree"])
 
-            # CLV = margin paid + market movement [added 25 Oct 2026]. The
+            # CLV = margin paid + market movement. The
             # movement is the part that measures information; see
             # clv.decompose_clv for the identity.
             parts = clv_summary.get("decomposition")
@@ -746,7 +746,7 @@ def main():
         print("\nCharts this script writes into docs/charts/:\n")
         for key, filename in CHARTS.items():
             print(f"  {filename:<34} {CHART_PURPOSE[key]}")
-        print("\nPlus numbers.json — the headline figures and the run fingerprint,"
+        print("\nPlus numbers.json: the headline figures and the run fingerprint,"
               "\nwhich tests/test_docs.py checks the README against.\n")
         return 0
 
@@ -760,7 +760,7 @@ def main():
             out_dir, args.allow_sample):
         return 2
 
-    print("\nV8 — building the README charts")
+    print("\nV8: building the README charts")
     print(f"  fingerprint: {logging_setup.run_fingerprint(config)}\n")
 
     with warnings.catch_warnings():
@@ -771,7 +771,7 @@ def main():
     wanted = args.only or list(CHARTS)
     for key in wanted:
         if data["clv"] is None and key in ("clv_distribution", "clv_by_edge"):
-            print(f"    skipping {CHARTS[key]} — no CLV data from this run")
+            print(f"    skipping {CHARTS[key]}: no CLV data from this run")
             continue
         BUILDERS[key](data, data["illustrative"], out_dir)
 
@@ -784,7 +784,7 @@ def main():
     print()
     if data["illustrative"]:
         print("  THESE CHARTS ARE STAMPED ILLUSTRATIVE. Do not commit them as")
-        print("  results — download the raw data and run again.")
+        print("  results: download the raw data and run again.")
     else:
         print("  Real data. Commit docs/charts/ and run pytest tests/test_docs.py")
         print("  to check the README's numbers against numbers.json.")

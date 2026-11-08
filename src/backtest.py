@@ -1,7 +1,7 @@
 r"""
-Stage 6 — Walk-forward backtesting.  [Built in Phase 6, 18 Oct 2026]
+Stage 6: Walk-forward backtesting. 
 
-**The honesty layer.** Everything before this phase produced numbers that were,
+**The validation layer.** Everything before this phase produced numbers that were,
 in one way or another, fitted on data they were then measured against. This
 module is what turns them into a forecast.
 
@@ -21,9 +21,9 @@ that priced it.
 Why a refit cadence rather than refitting every match
 -----------------------------------------------------
 Refitting before every single match is the purest version and is also what a
-real bettor could not do — the model would change between two matches kicking
-off at the same time. A cadence (`backtest.refit_every_n_days`) is both honest
-and realistic: it is what someone running this system weekly would actually have.
+real bettor could not do: the model would change between two matches kicking
+off at the same time. A cadence (`backtest.refit_every_n_days`) avoids lookahead
+and is realistic: it is what someone running this system weekly would actually have.
 The cost is that a model is up to one window stale when it prices the last match
 in that window, which is a conservative error, not a flattering one.
 
@@ -36,11 +36,11 @@ check runs in production.
 
 Three leaks this phase is built to prevent
 ------------------------------------------
-* **Model leak** — fitting on matches after the bet. Guarded per window.
-* **Calibration leak** — the subtler one. A calibration map fitted on all the
+* **Model leak**: fitting on matches after the bet. Guarded per window.
+* **Calibration leak**: the subtler one. A calibration map fitted on all the
   data has seen the outcomes of the matches it is calibrating, and the effect is
   invisible in the output: probabilities simply look better than they were.
-* **Odds leak** — staking at the closing price. The closing line is the
+* **Odds leak**: staking at the closing price. The closing line is the
   *benchmark*; betting into it would mean betting at a price that did not exist
   when the decision was made, and would quietly inflate everything.
 
@@ -155,7 +155,7 @@ def walk_forward(matches, config=None, progress=False):
         raise BacktestError(
             f"{len(data)} matches is not enough to back-test with a "
             f"{min_training}-match minimum training window. Use more seasons or "
-            "lower backtest.min_training_matches — but lowering it means the "
+            "lower backtest.min_training_matches, but lowering it means the "
             "early fits are built on very little."
         )
 
@@ -165,7 +165,7 @@ def walk_forward(matches, config=None, progress=False):
                             freq=f"{refit_days}D")
 
     all_bets = []
-    all_priced = []          # every priced match, bet or not [5 Nov 2026]
+    all_priced = []          # every priced match, bet or not
     window_log = []
     counts = {"windows": 0, "windows_skipped_no_fit": 0,
               "matches_priced": 0, "matches_unpriceable": 0}
@@ -231,12 +231,12 @@ def walk_forward(matches, config=None, progress=False):
             if column in window.columns:
                 priced[column] = window[column].to_numpy()
 
-        # --- Keep every priced match, not just the bets [added 5 Nov 2026] -
+        # --- Keep every priced match, not just the bets ---
         # A fair comparison with the market needs the model's probabilities on
         # EVERY match it priced, out of sample, exactly as staking saw them.
         # Before this, only the matches that became bets survived the loop, so
         # the only full set of model probabilities was Phase 4's single
-        # end-of-data fit - which had seen the results it was being scored on.
+        # end-of-data fit, which had seen the results it was being scored on.
         kept = [c for c in ("MatchID", "MatchDate", "HomeTeam", "AwayTeam",
                             "KnownTeams", "home_win", "draw", "away_win",
                             "OddsH", "OddsD", "OddsA", "CloseH", "CloseD",
@@ -253,7 +253,7 @@ def walk_forward(matches, config=None, progress=False):
             placed = bets[bets["stake_fraction"] > 0].copy()
             if not placed.empty:
                 # Record the closing price for CLV. Note this is used ONLY as a
-                # benchmark afterwards — the bet is struck at `odds`.
+                # benchmark afterwards; the bet is struck at `odds`.
                 placed["closing_odds"] = [
                     priced.set_index("MatchID").loc[
                         row["MatchID"], OUTCOMES[row["outcome"]]["closing"]]
@@ -336,7 +336,7 @@ def backtest_report(result, bankroll_summary=None):
 
     if bankroll_summary:
         lines.append("")
-        lines.append("  Bankroll (walk-forward — these are the honest numbers):")
+        lines.append("  Bankroll (walk-forward, out of sample):")
         lines.append(f"    {'ROI (on bankroll)':<30} "
                      f"{bankroll_summary['roi']:>+10.2%}")
         lines.append(f"    {'yield (on turnover)':<30} "
@@ -346,7 +346,7 @@ def backtest_report(result, bankroll_summary=None):
         lines.append(f"    {'maximum drawdown':<30} "
                      f"{bankroll_summary['max_drawdown']:>10.2%}")
         if bankroll_summary.get("ruined"):
-            lines.append("    RUINED — the bankroll reached zero.")
+            lines.append("    RUINED: the bankroll reached zero.")
 
     lines.append("")
     lines.append("  Every window was checked for lookahead before it was priced:")

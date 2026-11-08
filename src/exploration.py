@@ -1,5 +1,5 @@
 """
-Exploration: what the real data says before any modelling. [29 Oct 2026]
+Exploration: what the real data says before any modelling.
 
 Until now these measurements lived only inside notebooks/01_exploration.ipynb,
 which had never been run on real data: its committed outputs came from the
@@ -40,7 +40,7 @@ def load_canonical(config):
 
     Returns (table, real) where `real` says whether it came from data/raw.
     Goes through ingest.run_ingest, so exploration sees the same cleaned,
-    validated, de-duplicated rows the model does - not a second loader with
+    validated, de-duplicated rows the model does, not a second loader with
     its own quirks.
     """
     files = ingest.expected_raw_files(config)
@@ -90,7 +90,7 @@ def goal_means(table):
 
 
 def per_season(table):
-    """Outcome shares and goal means by season - is the effect stable?"""
+    """Outcome shares and goal means by season: is the effect stable?"""
     grouped = table.groupby("Season")
     frame = pd.DataFrame({
         "matches": grouped.size(),
@@ -109,7 +109,7 @@ def per_season(table):
 
 def _descriptive_config(config):
     """A config for IN-SAMPLE, descriptive fits: no time decay within the
-    data, no cutoff. This is exploration, not forecasting - the question is
+    data, no cutoff. This is exploration, not forecasting: the question is
     what the data looks like, not what could have been known in advance."""
     features = {**config.get("features", {}),
                 "half_life_days": 1e9, "min_match_weight": 0.0}
@@ -197,7 +197,7 @@ def overround(table, columns):
 
 
 def overround_by_season(table):
-    """Bet-into and closing overround per season - the margin is not a constant."""
+    """Bet-into and closing overround per season. The margin is not a constant."""
     rows = []
     for season, games in table.groupby("Season"):
         rows.append({"season": str(season),
@@ -209,15 +209,15 @@ def overround_by_season(table):
 def ece_noise_floor(probabilities, n_bins=10, n_sims=500, seed=7):
     """The ECE a PERFECTLY calibrated forecaster would score on these matches.
 
-    Added 29 Oct 2026. ECE is never zero on finite data: each bin's realised
+    ECE is never zero on finite data: each bin's realised
     frequency is itself an estimate. With ~60 matches per bin (380 matches,
-    6 occupied bins) a perfectly honest forecaster scores about 0.05 - the
+    6 occupied bins) a perfectly calibrated forecaster scores about 0.05, the
     same size as the "miscalibration" one would be tempted to report.
 
     So: keep the forecaster's own probabilities, draw outcomes FROM them (the
     world in which it is perfectly calibrated), and score ECE many times. An
     observed ECE above the 95th percentile of these is miscalibration the data
-    can actually see; below it, the honest reading is "consistent with perfect
+    can actually see; below it, the right reading is "consistent with perfect
     calibration".
     """
     p = np.asarray(probabilities, dtype=float)

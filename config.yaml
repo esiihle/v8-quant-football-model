@@ -1,5 +1,5 @@
 # =============================================================================
-# V8 configuration — the single source of truth for a run.
+# V8 configuration: the single source of truth for a run.
 # Nothing that changes behaviour should be hard-coded in the source; it lives
 # here so the same command always reproduces the same result.
 # =============================================================================
@@ -12,7 +12,7 @@ data:
   raw_dir: data/raw                             # real inputs (git-ignored)
   processed_dir: data/processed                 # canonical outputs (git-ignored)
 
-  # --- Real data source (added 30 Sep 2026) ---------------------------------
+  # --- Real data source ---------------------------------
   # football-data.co.uk publishes one CSV per league-season containing results,
   # shots, and both opening and CLOSING bookmaker odds. Closing odds are what
   # make CLV possible in Phase 6, which is why this source was chosen.
@@ -36,7 +36,7 @@ schema:
     - B365H
     - B365D
     - B365A
-  closing_odds_columns:   # closing odds — used for CLV in Phase 6
+  closing_odds_columns:   # closing odds: used for CLV in Phase 6
     - PSCH
     - PSCD
     - PSCA
@@ -66,7 +66,7 @@ features:
   # short enough to notice a squad that has changed.
   half_life_days: 180
 
-  # Ignore matches whose time-decay weight is below this [added 27 Oct 2026].
+  # Ignore matches whose time-decay weight is below this.
   # At a 180-day half-life, 0.01 means "older than 1,196 days (~3.3 seasons)".
   # Those matches carry ~1% of the total weight but, over 13 seasons, most of
   # the fitting time. The 2-season headline never reaches that age, so its
@@ -85,7 +85,7 @@ features:
 
   feature_filename: features.csv
 
-# Model settings (placeholders — tuned in their phases).
+# Model settings (placeholders, tuned in their phases).
 model:
   time_decay_half_life_days: 180   # Phase 3: likelihood weighting (see features.half_life_days)
   max_goals: 10                    # Phase 3: score-matrix truncation
@@ -154,7 +154,7 @@ backtest:
   min_training_matches: 200
 
   # How often the model and calibration map are refitted. Refitting before every
-  # match is the purest version and also what a real bettor could not do — the
+  # match is the purest version and also what a real bettor could not do: the
   # model would change between two matches kicking off together. A cadence is
   # honest AND realistic: it is what someone running this weekly would have. The
   # cost is a model up to one window stale, which is a conservative error.
@@ -175,7 +175,7 @@ backtest:
 logging:
   level: INFO
 
-# --- Simulation study (added 26 Oct 2026) -------------------------------------
+# --- Simulation study -------------------------------------
 # Not part of the run fingerprint: these settings shape the SIMULATED markets
 # that validate the backtester, not the real-data result.
 simulation:

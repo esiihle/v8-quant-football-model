@@ -1,5 +1,5 @@
 """
-The model against the market, scored on the same matches. [added 5 Nov 2026]
+The model against the market, scored on the same matches.
 
 Why this module exists
 ----------------------
